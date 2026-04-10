@@ -1,7 +1,7 @@
 import axios from 'axios'
 
-// Backend API base URL - Vercel deployed
-const API_BASE_URL = 'https://social-network-api-mu.vercel.app/api/v1'
+// Backend API base URL - same domain, routed by vercel.json
+const API_BASE_URL = '/api/v1'
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
