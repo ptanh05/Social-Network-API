@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { postsApi } from '../../api/posts'
+import { postsApi } from '../../services/posts'
 import Avatar from '../../components/ui/Avatar'
 import TopicBadge from '../../components/ui/TopicBadge'
 import CommentItem from './CommentItem'
-import type { Comment } from '../../api/types'
+import type { Comment } from '../../services/types'
 
 function timeAgo(dateStr: string) {
   const now = Date.now()

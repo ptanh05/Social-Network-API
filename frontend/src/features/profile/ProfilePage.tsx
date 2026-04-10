@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { usersApi } from '../../api/users'
+import { usersApi } from '../../services/users'
 import Avatar from '../../components/ui/Avatar'
 import { useAuth } from '../../context/AuthContext'
 

@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { postsApi } from '../../api/posts'
-import type { PostWithScore } from '../../api/types'
+import { postsApi } from '../../services/posts'
+import type { PostWithScore } from '../../services/types'
 import Avatar from '../../components/ui/Avatar'
 import TopicBadge from '../../components/ui/TopicBadge'
 

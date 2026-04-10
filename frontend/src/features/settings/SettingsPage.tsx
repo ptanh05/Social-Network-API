@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { usersApi } from '../../api/users'
-import { postsApi } from '../../api/posts'
+import { usersApi } from '../../services/users'
+import { postsApi } from '../../services/posts'
 import TopicSelector from '../../components/ui/TopicSelector'
 
 export default function SettingsPage() {

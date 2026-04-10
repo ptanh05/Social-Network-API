@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
-import { postsApi } from '../../api/posts'
-import type { Topic } from '../../api/types'
+import { postsApi } from '../../services/posts'
+import type { Topic } from '../../services/types'
 
 interface TopicSelectorProps {
   selected: number[]

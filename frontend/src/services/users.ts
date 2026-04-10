@@ -1,4 +1,4 @@
-import { api } from '../lib/api'
+import { api } from './lib/api'
 import type { User, UserProfile, FollowStatus, PreferenceWithTopics } from './types'
 
 export const usersApi = {

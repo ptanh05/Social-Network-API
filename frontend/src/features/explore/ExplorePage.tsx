@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { postsApi } from '../../api/posts'
+import { postsApi } from '../../services/posts'
 import PostCard from '../feed/PostCard'
-import type { Post } from '../../api/types'
+import type { Post } from '../../services/types'
 
 export default function ExplorePage() {
   const [selectedTopicId, setSelectedTopicId] = useState<number | null>(null)

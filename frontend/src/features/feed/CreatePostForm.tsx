@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { postsApi } from '../../api/posts'
+import { postsApi } from '../../services/posts'
 import TopicSelector from '../../components/ui/TopicSelector'
 
 export default function CreatePostForm() {

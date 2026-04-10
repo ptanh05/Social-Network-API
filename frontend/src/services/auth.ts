@@ -1,4 +1,4 @@
-import { api } from '../lib/api'
+import { api } from './lib/api'
 import type { User, TokenResponse } from './types'
 
 export const authApi = {

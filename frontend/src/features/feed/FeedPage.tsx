@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { postsApi } from '../../api/posts'
+import { postsApi } from '../../services/posts'
 import PostCard from './PostCard'
 import CreatePostForm from './CreatePostForm'
 

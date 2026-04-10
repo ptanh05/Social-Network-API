@@ -1,4 +1,4 @@
-import type { Topic } from '../../api/types'
+import type { Topic } from '../../services/types'
 
 interface TopicBadgeProps {
   topic: Topic
