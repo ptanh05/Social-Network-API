@@ -21,6 +21,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Restore session on app load
   useEffect(() => {
     const token = sessionStorage.getItem('access_token')
+    const refreshToken = sessionStorage.getItem('refresh_token')
     const savedUser = sessionStorage.getItem('user')
     if (token && savedUser) {
       setAccessToken(token)
@@ -30,6 +31,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .then(setUser)
         .catch(() => {
           sessionStorage.removeItem('access_token')
+          sessionStorage.removeItem('refresh_token')
           sessionStorage.removeItem('user')
           setAccessToken(null)
           setUser(null)
@@ -42,9 +44,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (username: string, password: string) => {
     const res = await authApi.login(username, password)
-    const token = res.access_token
-    sessionStorage.setItem('access_token', token)
-    setAccessToken(token)
+    sessionStorage.setItem('access_token', res.access_token)
+    sessionStorage.setItem('refresh_token', res.refresh_token)
+    setAccessToken(res.access_token)
 
     const me = await authApi.getMe()
     setUser(me)
@@ -53,6 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     sessionStorage.removeItem('access_token')
+    sessionStorage.removeItem('refresh_token')
     sessionStorage.removeItem('user')
     setAccessToken(null)
     setUser(null)
@@ -61,6 +64,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = async (data: { username: string; email: string; password: string; date_of_birth?: string }) => {
     await authApi.register(data)
+    // Auto-login after register
+    await login(data.username, data.password)
   }
 
   return (

@@ -57,9 +57,35 @@ export interface FollowStatus {
 
 export interface TokenResponse {
   access_token: string
-  token_type: string
+  refresh_token?: string
+  token_type?: string
+  expires_in?: number
 }
 
 export interface PreferenceWithTopics {
   topics: Topic[]
+}
+
+export interface Notification {
+  id: number
+  user_id: number
+  type: 'like' | 'comment' | 'follow' | 'mention'
+  data: Record<string, unknown>
+  is_read: boolean
+  created_at: string
+}
+
+export interface BookmarksResponse {
+  posts: Post[]
+  next_cursor: number | null
+}
+
+export interface NotificationsResponse {
+  notifications: Notification[]
+  next_cursor: number | null
+}
+
+export interface CursorPaginatedResponse<T> {
+  items: T[]
+  next_cursor: number | null
 }

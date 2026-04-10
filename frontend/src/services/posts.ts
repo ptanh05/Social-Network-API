@@ -1,9 +1,16 @@
 import { api } from './lib/api'
 import type { Post, PostWithScore, Topic, Comment, LikeStatus } from './types'
 
+export interface PaginatedPosts {
+  items: Post[]
+  next_cursor: string | null
+}
+
 export const postsApi = {
-  getFeed: async (skip = 0, limit = 20): Promise<PostWithScore[]> => {
-    const res = await api.get<PostWithScore[]>('/posts/feed', { params: { skip, limit } })
+  getFeed: async (cursor?: string, limit = 20): Promise<PaginatedPosts> => {
+    const params: Record<string, string> = { limit: String(limit) }
+    if (cursor !== undefined) params.cursor = String(cursor)
+    const res = await api.get<PaginatedPosts>('/posts/feed', { params })
     return res.data
   },
 
@@ -26,8 +33,18 @@ export const postsApi = {
     await api.delete(`/posts/${postId}`)
   },
 
-  explore: async (topicId: number, skip = 0, limit = 20): Promise<Post[]> => {
-    const res = await api.get<Post[]>('/posts/explore', { params: { topic_id: topicId, skip, limit } })
+  explore: async (topicId?: number, cursor?: string, limit = 10): Promise<PaginatedPosts> => {
+    const params: Record<string, string> = { limit: String(limit) }
+    if (topicId !== undefined) params.topic_id = String(topicId)
+    if (cursor !== undefined) params.cursor = cursor
+    const res = await api.get<PaginatedPosts>('/posts/explore', { params })
+    return res.data
+  },
+
+  searchPosts: async (query: string, cursor?: string, limit = 20): Promise<PaginatedPosts> => {
+    const params: Record<string, string> = { q: query, limit: String(limit) }
+    if (cursor !== undefined) params.cursor = cursor
+    const res = await api.get<PaginatedPosts>('/posts/search', { params })
     return res.data
   },
 

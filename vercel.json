@@ -1,7 +1,7 @@
 {
   "builds": [
     {
-      "src": "api/index.js",
+      "src": "backend/index.js",
       "use": "@vercel/node"
     },
     {
@@ -13,11 +13,11 @@
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "api/index.js"
+      "dest": "backend/index.js"
     },
     {
       "src": "/health",
-      "dest": "api/index.js"
+      "dest": "backend/index.js"
     },
     {
       "src": "/(.*)",
