@@ -39,3 +39,9 @@ class UserInDB(BaseModel):
     is_admin: bool
 
     model_config = {"from_attributes": True}
+
+
+class UserProfile(UserRead):
+    followers_count: int = 0
+    following_count: int = 0
+    posts_count: int = 0
