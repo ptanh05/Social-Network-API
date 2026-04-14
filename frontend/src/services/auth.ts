@@ -10,7 +10,10 @@ export interface AuthTokens {
 
 export const authApi = {
   login: async (username: string, password: string): Promise<AuthTokens> => {
-    const res = await api.post<AuthTokens>('/auth/login', { username, password })
+    const res = await api.post<AuthTokens>('/auth/login', {
+      username,
+      password,
+    })
     return res.data
   },
 
@@ -20,6 +23,8 @@ export const authApi = {
     password: string
     date_of_birth?: string
   }): Promise<User> => {
+    console.log("REGISTER DATA:", data) // 👈 đặt ở đây mới đúng
+
     const res = await api.post<User>('/auth/register', data)
     return res.data
   },
