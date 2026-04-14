@@ -19,7 +19,14 @@ export default function RegisterPage() {
     setError('')
     setLoading(true)
     try {
-      await register(form)
+      // HTML date input returns YYYY-MM-DD, but some locales / manual entry
+      // may produce DD/MM/YYYY — handle both formats transparently.
+      let dateOfBirth: string | undefined = form.date_of_birth
+      if (dateOfBirth && dateOfBirth.includes('/')) {
+        const [d, m, y] = dateOfBirth.split('/')
+        dateOfBirth = `${y}-${m}-${d}`
+      }
+      await register({ ...form, date_of_birth: dateOfBirth })
       navigate('/login')
     } catch (err: unknown) {
       const e = err as { response?: { data?: { detail?: string } } }
@@ -30,6 +37,14 @@ export default function RegisterPage() {
   }
 
   const inputClass = 'w-full px-4 py-2.5 border border-gray-300 dark:border-dark-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text placeholder:text-gray-400'
+
+  const handleInputChange = (field: 'username' | 'email' | 'password' | 'date_of_birth', value: string) => {
+    setForm({ ...form, [field]: value })
+    // Clear field-specific errors on typing
+    if (field === 'username' && (value.length >= 3)) setError('')
+    if (field === 'email' && value.includes('@')) setError('')
+    if (field === 'password' && value.length >= 6) setError('')
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-dark-bg px-4">
@@ -44,23 +59,48 @@ export default function RegisterPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">Tên đăng nhập</label>
-            <input type="text" value={form.username} onChange={e => setForm({ ...form, username: e.target.value })}
-              className={inputClass} placeholder="Ít nhất 3 ký tự" minLength={3} required />
+            <input
+              type="text"
+              value={form.username}
+              onChange={e => handleInputChange('username', e.target.value)}
+              className={inputClass}
+              placeholder="4–20 ký tự: chữ cái, số và dấu gạch dưới"
+              pattern="[a-zA-Z0-9_]{4,20}"
+              title="4–20 ký tự: chữ cái, số và dấu gạch dưới"
+              required
+            />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">Email</label>
-            <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })}
-              className={inputClass} placeholder="example@email.com" required />
+            <input
+              type="email"
+              value={form.email}
+              onChange={e => handleInputChange('email', e.target.value)}
+              className={inputClass}
+              placeholder="example@email.com"
+              required
+            />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">Mật khẩu</label>
-            <input type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })}
-              className={inputClass} placeholder="Ít nhất 6 ký tự" minLength={6} required />
+            <input
+              type="password"
+              value={form.password}
+              onChange={e => handleInputChange('password', e.target.value)}
+              className={inputClass}
+              placeholder="Ít nhất 8 ký tự"
+              minLength={8}
+              required
+            />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">Ngày sinh (tùy chọn)</label>
-            <input type="date" value={form.date_of_birth} onChange={e => setForm({ ...form, date_of_birth: e.target.value })}
-              className={inputClass} />
+            <input
+              type="date"
+              value={form.date_of_birth}
+              onChange={e => handleInputChange('date_of_birth', e.target.value)}
+              className={inputClass}
+            />
           </div>
           <button type="submit" disabled={loading}
             className="w-full bg-blue-500 text-white py-2.5 rounded-lg font-medium hover:bg-blue-600 transition-colors disabled:opacity-50">

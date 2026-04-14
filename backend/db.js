@@ -14,7 +14,17 @@ if (process.env.POSTGRES_URL) {
   const postgres = (await import('postgres')).default
   _sql = postgres(process.env.DATABASE_URL)
 } else {
-  throw new Error('Neither POSTGRES_URL nor DATABASE_URL is set')
+  console.warn('⚠️  Neither POSTGRES_URL nor DATABASE_URL set — db.js loaded but no DB connection. Will retry on first query.')
+  _sql = null
+}
+
+// ─── Safe placeholder sql (no-ops until first real request) ──────────────────
+if (!_sql) {
+  _sql = {
+    unsafe: () => {
+      throw new Error('Database not initialized yet. Set DATABASE_URL or POSTGRES_URL env vars.')
+    },
+  }
 }
 
 // Tagged template literal — works with @vercel/postgres and postgres.js
@@ -134,6 +144,10 @@ let initialized = false
 
 export async function initDb() {
   if (initialized) return
+  if (!_sql || !process.env.POSTGRES_URL && !process.env.DATABASE_URL) {
+    console.warn('⚠️  initDb skipped: no database connection configured')
+    return
+  }
   try {
     await _sql.unsafe('SELECT 1')
     await _sql.unsafe(SCHEMA)
@@ -141,7 +155,7 @@ export async function initDb() {
     console.log('✅ Database schema ready')
   } catch (e) {
     console.error('❌ DB init failed:', e.message)
-    throw e
+    // Do not throw — let the server start and let runtime queries fail with a clear error
   }
 }
 

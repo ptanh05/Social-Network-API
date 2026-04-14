@@ -94,10 +94,14 @@ async function POST_auth_register(req, res) {
       RETURNING id, username, email, date_of_birth, is_admin, created_at`
     return created(res, rows[0])
   } catch (e) {
-    if (e.code === '23505') {
-      const field = e.constraint?.includes('username') ? 'Username' : 'Email'
-      return err(res, 400, `${field} already registered`)
+    // postgres.js uses 'constraint' or 'code' property on the error object
+    if (e.code === '23505' || (e.fields && e.fields.constraint)) {
+      const constraint = e.constraint || e.fields?.constraint || ''
+      if (constraint.includes('username')) return err(res, 400, 'Username already registered')
+      if (constraint.includes('email')) return err(res, 400, 'Email already registered')
+      return err(res, 400, 'Username or Email already registered')
     }
+    console.error('Register error:', e)
     return err(res, 500, 'Registration failed')
   }
 }
