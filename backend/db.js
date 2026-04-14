@@ -30,10 +30,22 @@ if (!_sql) {
 // Tagged template literal — works with @vercel/postgres and postgres.js
 // rawStrings[0] is the query with ${placeholders}
 // values is the array of interpolated values
-const sql = (rawStrings, ...values) => {
-  return _sql.unsafe(rawStrings[0], values)
+// const sql = (rawStrings, ...values) => {
+//   return _sql.unsafe(rawStrings[0], values)
+// }
+// Tagged template literal — works with @vercel/postgres and postgres.js
+const sql = async (rawStrings, ...values) => {
+  if (process.env.POSTGRES_URL) {
+    // Nếu dùng vercel/postgres thì _sql trả về sẵn { rows } rồi nên để nguyên
+    return await _sql(rawStrings, ...values)
+  } else {
+    // Nếu dùng postgres.js (như bạn đang dùng qua DATABASE_URL)
+    // kết quả trả về CHÍNH LÀ 1 array, ta cần gán nó vào struct { rows } 
+    // để tương thích với tất cả code bên trong index.js của bạn.
+    const result = await _sql(rawStrings, ...values)
+    return { rows: result }
+  }
 }
-
 // ─── Schema Init ─────────────────────────────────────────────────────────────
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS users (
