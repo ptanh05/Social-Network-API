@@ -9,6 +9,7 @@ import { z } from 'zod';
 const ALLOWED_ORIGINS = [
   'http://localhost:5173',
   'http://localhost:5174',
+  'https://social-network-5emiiq1c9-ptanh05s-projects.vercel.app',
   'https://social-network-api-seven.vercel.app',
   'https://social-network-aplqf0k.onrender.com',
 ];
@@ -18,8 +19,12 @@ const app = express();
 // Manual CORS — no external package, more reliable on Vercel
 app.use((req, res, next) => {
   const origin = req.headers.origin ?? '';
-  const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
-  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+  res.setHeader('Vary', 'Origin');
+  if (!ALLOWED_ORIGINS.includes(origin)) {
+    // Reject instead of silently falling back to localhost
+    return next();
+  }
+  res.setHeader('Access-Control-Allow-Origin', origin);
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
