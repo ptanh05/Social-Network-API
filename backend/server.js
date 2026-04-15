@@ -118,7 +118,7 @@ async function POST_auth_login(req, res) {
   const body = req.body
   const { username, password } = body
 
-  const { rows } = await sql`SELECT * FROM users WHERE username = ${username}`
+  const { rows } = await sql`SELECT * FROM users WHERE username = ${username} OR email = ${username}`
   const user = rows[0]
   if (!user) return err(res, 401, 'Incorrect username or password')
 

@@ -36,7 +36,7 @@ export async function POST_auth_login(request) {
 
   if (!username || !password) return badRequest('Username and password are required')
 
-  const { rows } = await sql`SELECT * FROM users WHERE username = ${username}`
+  const { rows } = await sql`SELECT * FROM users WHERE username = ${username} OR email = ${username}`
   const user = rows[0]
   if (!user) return unauthorized('Incorrect username or password')
 

@@ -1,7 +1,7 @@
 import axios from 'axios'
 
 // const API_BASE_URL = 'https://social-network-api-f1kb.onrender.com/api/v1'
-const API_BASE_URL = 'http://localhost:3002/api/v1'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api/v1'
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -39,8 +39,7 @@ api.interceptors.response.use(
           return Promise.reject(error)
         }
         try {
-          // const res = await axios.post('https://social-network-api-f1kb.onrender.com/api/v1/auth/refresh', { refresh_token: refreshToken })
-          const res = await axios.post('http://localhost:3002/api/v1/auth/refresh', { refresh_token: refreshToken })
+          const res = await axios.post(`${API_BASE_URL}/auth/refresh`, { refresh_token: refreshToken })
           const { access_token, refresh_token: newRefresh } = res.data
           sessionStorage.setItem('access_token', access_token)
           sessionStorage.setItem('refresh_token', newRefresh)
