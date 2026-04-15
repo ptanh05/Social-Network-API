@@ -14,6 +14,7 @@ import SettingsPage from './features/settings/SettingsPage'
 import NotificationsPage from './features/notifications/NotificationsPage'
 import BookmarksPage from './features/bookmarks/BookmarksPage'
 import SearchPage from './features/search/SearchPage'
+import AdminPage from './features/admin/AdminPage'
 
 export default function App() {
   return (
@@ -42,6 +43,7 @@ export default function App() {
               <Route path="/notifications" element={<NotificationsPage />} />
               <Route path="/bookmarks" element={<BookmarksPage />} />
               <Route path="/search" element={<SearchPage />} />
+              <Route path="/admin" element={<AdminPage />} />
             </Route>
 
             {/* 404 */}

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import { registerSchema } from '../../validators/schemas'
 
 export default function RegisterPage() {
   const [form, setForm] = useState({
@@ -9,24 +10,44 @@ export default function RegisterPage() {
     password: '',
     date_of_birth: '',
   })
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const { register } = useAuth()
   const navigate = useNavigate()
 
+  const handleChange = (field: 'username' | 'email' | 'password' | 'date_of_birth', value: string) => {
+    setForm((prev) => ({ ...prev, [field]: value }))
+    setFieldErrors((prev) => ({ ...prev, [field]: '' }))
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    setFieldErrors({})
+
+    // Parse date if provided
+    let dateOfBirth = form.date_of_birth
+    if (dateOfBirth && dateOfBirth.includes('/')) {
+      const [d, m, y] = dateOfBirth.split('/')
+      dateOfBirth = `${y}-${m}-${d}`
+    }
+
+    const payload = { ...form, date_of_birth: dateOfBirth || undefined }
+
+    const result = registerSchema.safeParse(payload)
+    if (!result.success) {
+      const errors: Record<string, string> = {}
+      for (const issue of result.error.issues) {
+        errors[issue.path.join('.')] = issue.message
+      }
+      setFieldErrors(errors)
+      return
+    }
+
     setLoading(true)
     try {
-      // HTML date input returns YYYY-MM-DD, but some locales / manual entry
-      // may produce DD/MM/YYYY — handle both formats transparently.
-      let dateOfBirth: string | undefined = form.date_of_birth
-      if (dateOfBirth && dateOfBirth.includes('/')) {
-        const [d, m, y] = dateOfBirth.split('/')
-        dateOfBirth = `${y}-${m}-${d}`
-      }
-      await register({ ...form, date_of_birth: dateOfBirth })
+      await register(result.data)
       navigate('/login')
     } catch (err: unknown) {
       const e = err as { response?: { data?: { detail?: string } } }
@@ -36,15 +57,12 @@ export default function RegisterPage() {
     }
   }
 
-  const inputClass = 'w-full px-4 py-2.5 border border-gray-300 dark:border-dark-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text placeholder:text-gray-400'
-
-  const handleInputChange = (field: 'username' | 'email' | 'password' | 'date_of_birth', value: string) => {
-    setForm({ ...form, [field]: value })
-    // Clear field-specific errors on typing
-    if (field === 'username' && (value.length >= 3)) setError('')
-    if (field === 'email' && value.includes('@')) setError('')
-    if (field === 'password' && value.length >= 6) setError('')
-  }
+  const inputClass = (field: string) =>
+    `w-full px-4 py-2.5 border rounded-lg outline-none bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text placeholder:text-gray-400 transition-colors ${
+      fieldErrors[field]
+        ? 'border-red-500 focus:ring-2 focus:ring-red-500'
+        : 'border-gray-300 dark:border-dark-border focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+    }`
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-dark-bg px-4">
@@ -62,44 +80,53 @@ export default function RegisterPage() {
             <input
               type="text"
               value={form.username}
-              onChange={e => handleInputChange('username', e.target.value)}
-              className={inputClass}
+              onChange={(e) => handleChange('username', e.target.value)}
+              className={inputClass('username')}
               placeholder="4–20 ký tự: chữ cái, số và dấu gạch dưới"
               pattern="[a-zA-Z0-9_]{4,20}"
               title="4–20 ký tự: chữ cái, số và dấu gạch dưới"
               required
             />
+            {fieldErrors.username && (
+              <p className="mt-1 text-xs text-red-500">{fieldErrors.username}</p>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">Email</label>
             <input
               type="email"
               value={form.email}
-              onChange={e => handleInputChange('email', e.target.value)}
-              className={inputClass}
+              onChange={(e) => handleChange('email', e.target.value)}
+              className={inputClass('email')}
               placeholder="example@email.com"
               required
             />
+            {fieldErrors.email && (
+              <p className="mt-1 text-xs text-red-500">{fieldErrors.email}</p>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">Mật khẩu</label>
             <input
               type="password"
               value={form.password}
-              onChange={e => handleInputChange('password', e.target.value)}
-              className={inputClass}
+              onChange={(e) => handleChange('password', e.target.value)}
+              className={inputClass('password')}
               placeholder="Ít nhất 8 ký tự"
               minLength={8}
               required
             />
+            {fieldErrors.password && (
+              <p className="mt-1 text-xs text-red-500">{fieldErrors.password}</p>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">Ngày sinh (tùy chọn)</label>
             <input
               type="date"
               value={form.date_of_birth}
-              onChange={e => handleInputChange('date_of_birth', e.target.value)}
-              className={inputClass}
+              onChange={(e) => handleChange('date_of_birth', e.target.value)}
+              className={inputClass('date_of_birth')}
             />
           </div>
           <button type="submit" disabled={loading}

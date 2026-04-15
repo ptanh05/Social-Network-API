@@ -98,6 +98,11 @@ export default function Navbar() {
           <Link to="/settings" className="px-3 py-2 rounded-lg text-gray-600 dark:text-dark-muted hover:bg-gray-100 dark:hover:bg-dark-bg text-sm font-medium transition-colors">
             ⚙️
           </Link>
+          {user?.is_admin && (
+            <Link to="/admin" className="px-3 py-2 rounded-lg text-gray-600 dark:text-dark-muted hover:bg-gray-100 dark:hover:bg-dark-bg text-sm font-medium transition-colors" title="Quản trị">
+              🛡️
+            </Link>
+          )}
         </nav>
 
         {/* Right actions */}
@@ -170,6 +175,11 @@ export default function Navbar() {
           <Link to="/settings" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-gray-700 dark:text-dark-text hover:bg-gray-100 dark:hover:bg-dark-bg text-sm font-medium">
             ⚙️ Cài đặt
           </Link>
+          {user?.is_admin && (
+            <Link to="/admin" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-gray-700 dark:text-dark-text hover:bg-gray-100 dark:hover:bg-dark-bg text-sm font-medium">
+              🛡️ Quản trị
+            </Link>
+          )}
           <button onClick={logout} className="flex items-center gap-3 w-full px-4 py-2.5 rounded-lg text-red-500 hover:bg-red-50 text-sm font-medium">
             🚪 Đăng xuất
           </button>

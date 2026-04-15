@@ -1,21 +1,32 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
-import { useTheme } from '../../context/ThemeContext'
+import { loginSchema } from '../../validators/schemas'
 
 export default function LoginPage() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const { login } = useAuth()
-  const { theme: _theme } = useTheme()
-  void _theme
   const navigate = useNavigate()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    setFieldErrors({})
+
+    const result = loginSchema.safeParse({ username, password })
+    if (!result.success) {
+      const errors: Record<string, string> = {}
+      for (const issue of result.error.issues) {
+        errors[issue.path.join('.')] = issue.message
+      }
+      setFieldErrors(errors)
+      return
+    }
+
     setLoading(true)
     try {
       await login(username, password)
@@ -26,6 +37,13 @@ export default function LoginPage() {
       setLoading(false)
     }
   }
+
+  const inputClass = (field: string) =>
+    `w-full px-4 py-2.5 border rounded-lg outline-none bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text placeholder:text-gray-400 transition-colors ${
+      fieldErrors[field]
+        ? 'border-red-500 focus:ring-2 focus:ring-red-500'
+        : 'border-gray-300 dark:border-dark-border focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+    }`
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-dark-bg px-4">
@@ -43,11 +61,14 @@ export default function LoginPage() {
             <input
               type="text"
               value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="w-full px-4 py-2.5 border border-gray-300 dark:border-dark-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text placeholder:text-gray-400"
+              onChange={(e) => { setUsername(e.target.value); setFieldErrors((p) => ({ ...p, username: '' })) }}
+              className={inputClass('username')}
               placeholder="Nhập tên đăng nhập"
               required
             />
+            {fieldErrors.username && (
+              <p className="mt-1 text-xs text-red-500">{fieldErrors.username}</p>
+            )}
           </div>
 
           <div>
@@ -55,11 +76,14 @@ export default function LoginPage() {
             <input
               type="password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-2.5 border border-gray-300 dark:border-dark-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text placeholder:text-gray-400"
+              onChange={(e) => { setPassword(e.target.value); setFieldErrors((p) => ({ ...p, password: '' })) }}
+              className={inputClass('password')}
               placeholder="Nhập mật khẩu"
               required
             />
+            {fieldErrors.password && (
+              <p className="mt-1 text-xs text-red-500">{fieldErrors.password}</p>
+            )}
           </div>
 
           <button
@@ -73,9 +97,7 @@ export default function LoginPage() {
 
         <p className="text-center text-sm text-gray-500 dark:text-dark-muted mt-4">
           Chưa có tài khoản?{' '}
-          <Link to="/register" className="text-blue-500 hover:underline font-medium">
-            Đăng ký ngay
-          </Link>
+          <Link to="/register" className="text-blue-500 hover:underline font-medium">Đăng ký ngay</Link>
         </p>
       </div>
     </div>

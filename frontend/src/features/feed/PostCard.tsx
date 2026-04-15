@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { postsApi } from '../../services/posts';
 import { bookmarksApi } from '../../services/bookmarks';
+import { reportsApi } from '../../services/reports';
 import { api } from '../../lib/api';
 import type { PostWithScore, Topic, LikeStatus } from '../../services/types';
 import Avatar from '../../components/ui/Avatar';
@@ -66,6 +67,9 @@ export default function PostCard({ post }: PostCardProps) {
         post.topics.map((t: Topic) => t.id)
     );
     const [confirmDelete, setConfirmDelete] = useState(false);
+    const [showMore, setShowMore] = useState(false);
+    const [showReportModal, setShowReportModal] = useState(false);
+    const [reportReason, setReportReason] = useState('');
 
     const isOwner = user?.id === post.author_id;
 
@@ -151,6 +155,18 @@ export default function PostCard({ post }: PostCardProps) {
                 queryKey: ['bookmarkStatus', post.id]
             });
             queryClient.invalidateQueries({ queryKey: ['bookmarks'] });
+        }
+    });
+
+    const reportMutation = useMutation({
+        mutationFn: () => reportsApi.createReport({ target_type: 'post', target_id: post.id, reason: reportReason }),
+        onSuccess: () => {
+            showToast('Đã gửi báo cáo. Cảm ơn bạn!', 'success');
+            setShowReportModal(false);
+            setReportReason('');
+        },
+        onError: () => {
+            showToast('Gửi báo cáo thất bại', 'error');
         }
     });
 
@@ -253,6 +269,31 @@ export default function PostCard({ post }: PostCardProps) {
                         )}
                     </div>
                 )}
+
+                {/* Non-owner: more menu */}
+                {!isOwner && user && (
+                    <div className='relative'>
+                        <button
+                            onClick={() => setShowMore(!showMore)}
+                            className='p-1.5 rounded-lg text-gray-400 dark:text-dark-muted hover:bg-gray-100 dark:hover:bg-dark-border transition-colors'
+                        >
+                            ⋯
+                        </button>
+                        {showMore && (
+                            <>
+                                <div className='fixed inset-0 z-10' onClick={() => setShowMore(false)} />
+                                <div className='absolute right-0 top-full mt-1 z-20 bg-white dark:bg-dark-card border border-gray-200 dark:border-dark-border rounded-xl shadow-lg py-1 min-w-36 overflow-hidden'>
+                                    <button
+                                        onClick={() => { setShowMore(false); setShowReportModal(true); }}
+                                        className='w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors'
+                                    >
+                                        🚩 Báo cáo
+                                    </button>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                )}
             </div>
 
             {/* Content */}
@@ -309,6 +350,43 @@ export default function PostCard({ post }: PostCardProps) {
                     <span>{bookmarked ? '🔖' : '💾'}</span>
                 </button>
             </div>
+
+            {/* Report Modal */}
+            {showReportModal && (
+                <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4'>
+                    <div className='bg-white dark:bg-dark-card rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4'>
+                        <div className='flex items-center justify-between'>
+                            <h3 className='text-lg font-bold dark:text-white'>Báo cáo bài viết</h3>
+                            <button onClick={() => setShowReportModal(false)} className='text-gray-400 hover:text-gray-600 dark:hover:text-white text-xl'>✕</button>
+                        </div>
+                        <p className='text-sm text-gray-500 dark:text-dark-muted'>
+                            Mô tả lý do bạn báo cáo bài viết này. Đội ngũ quản trị sẽ xem xét.
+                        </p>
+                        <textarea
+                            value={reportReason}
+                            onChange={(e) => setReportReason(e.target.value)}
+                            placeholder='Lý do báo cáo (tối thiểu 5 ký tự)...'
+                            className='w-full border border-gray-200 dark:border-dark-border rounded-lg p-3 text-sm resize-none focus:ring-2 focus:ring-red-500 outline-none bg-white dark:bg-dark-bg dark:text-dark-text'
+                            rows={4}
+                        />
+                        <div className='flex gap-3 justify-end'>
+                            <button
+                                onClick={() => setShowReportModal(false)}
+                                className='px-4 py-2 rounded-lg text-sm text-gray-600 dark:text-dark-muted hover:bg-gray-100 dark:hover:bg-dark-border transition-colors'
+                            >
+                                Hủy
+                            </button>
+                            <button
+                                onClick={() => reportMutation.mutate()}
+                                disabled={reportMutation.isPending || reportReason.trim().length < 5}
+                                className='px-4 py-2 rounded-lg text-sm bg-red-500 text-white hover:bg-red-600 disabled:opacity-50 transition-colors'
+                            >
+                                {reportMutation.isPending ? 'Đang gửi...' : 'Gửi báo cáo'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

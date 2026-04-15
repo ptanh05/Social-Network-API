@@ -92,6 +92,22 @@ export default function Sidebar() {
           Cài đặt
         </NavLink>
 
+        {user?.is_admin && (
+          <NavLink
+            to="/admin"
+            className={({ isActive }) =>
+              `flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                isActive
+                  ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+                  : 'text-gray-600 dark:text-dark-muted hover:bg-gray-100 dark:hover:bg-dark-card'
+              }`
+            }
+          >
+            <span>🛡️</span>
+            Quản trị
+          </NavLink>
+        )}
+
         {/* Sidebar search */}
         <div id="sidebar-search" className="relative mt-2">
           <input

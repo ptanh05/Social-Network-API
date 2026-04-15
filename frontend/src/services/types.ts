@@ -1,83 +1,106 @@
-// Shared TypeScript types mirroring backend Pydantic schemas
+// Shared TypeScript types mirroring backend API responses
+// These are kept in sync with backend Zod schemas in src/validators/schemas.ts
 
-export interface User {
-  id: number
-  username: string
-  email: string
-  avatar_url?: string
-  date_of_birth: string | null
-  is_admin: boolean
-  created_at: string
-}
+import { z } from 'zod';
+
+// ─── Zod Schemas (inferred into TypeScript types) ───────────────────────────────
+
+export const userSchema = z.object({
+  id: z.number(),
+  username: z.string(),
+  email: z.string().email(),
+  avatar_url: z.string().optional(),
+  date_of_birth: z.string().nullable(),
+  is_admin: z.boolean(),
+  created_at: z.string(),
+});
+
+export const topicSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  description: z.string().nullable(),
+});
+
+export const postSchema = z.object({
+  id: z.number(),
+  content: z.string(),
+  author_id: z.number(),
+  created_at: z.string(),
+  updated_at: z.string(),
+  topics: z.array(topicSchema),
+  author: userSchema.nullable(),
+  likes_count: z.number(),
+  comments_count: z.number(),
+});
+
+export const commentSchema = z.object({
+  id: z.number(),
+  content: z.string(),
+  post_id: z.number(),
+  author_id: z.number(),
+  parent_id: z.number().nullable(),
+  created_at: z.string(),
+  author: userSchema.nullable(),
+});
+
+export const notificationSchema = z.object({
+  id: z.number(),
+  user_id: z.number(),
+  type: z.string(),
+  data: z.record(z.string(), z.any()),
+  actor_avatar_url: z.string().nullable(),
+  is_read: z.boolean(),
+  created_at: z.string(),
+});
+
+// ─── Inferred Types ────────────────────────────────────────────────────────────
+
+export type User = z.infer<typeof userSchema>;
+export type Topic = z.infer<typeof topicSchema>;
+export type Post = z.infer<typeof postSchema>;
+export type Comment = z.infer<typeof commentSchema>;
+export type Notification = z.infer<typeof notificationSchema>;
 
 export interface UserProfile extends User {
-  followers_count?: number
-  following_count?: number
-  posts_count?: number
-}
-
-export interface Topic {
-  id: number
-  name: string
-  description: string | null
-}
-
-export interface Post {
-  id: number
-  content: string
-  author_id: number
-  created_at: string
-  updated_at: string
-  topics: Topic[]
-  author: User | null
-  likes_count: number
-  comments_count: number
+  followers_count: number;
+  following_count: number;
+  posts_count: number;
 }
 
 export interface PostWithScore extends Post {
-  feed_score: number
-}
-
-export interface Comment {
-  id: number
-  content: string
-  post_id: number
-  author_id: number
-  parent_id: number | null
-  created_at: string
-  author: User | null
+  feed_score: number;
 }
 
 export interface LikeStatus {
-  liked: boolean
+  liked: boolean;
 }
 
 export interface FollowStatus {
-  following: boolean
+  following: boolean;
 }
 
 export interface TokenResponse {
-  access_token: string
-  refresh_token?: string
-  token_type?: string
-  expires_in?: number
+  access_token: string;
+  refresh_token?: string;
+  token_type?: string;
+  expires_in?: number;
 }
 
 export interface PreferenceWithTopics {
-  topics: Topic[]
+  topics: Topic[];
 }
 
 export interface BookmarksResponse {
-  posts: Post[]
-  next_cursor: string | null
+  posts: Post[];
+  next_cursor: string | null;
 }
 
 export interface NotificationsResponse {
-  notifications: Notification[]
-  next_cursor: string | null
+  notifications: Notification[];
+  next_cursor: string | null;
 }
 
 export interface CursorPaginatedResponse<T> {
-  items: T[]
-  next_cursor: string | null
+  items: T[];
+  next_cursor: string | null;
 }

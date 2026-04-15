@@ -1,0 +1,183 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id             Int       @id @default(autoincrement())
+  username       String    @unique @db.VarChar(50)
+  email          String    @unique @db.VarChar(255)
+  hashedPassword String    @map("hashed_password") @db.VarChar(255)
+  dateOfBirth    DateTime? @map("date_of_birth") @db.Date
+  avatarUrl      String    @default("") @map("avatar_url") @db.Text
+  isAdmin        Boolean   @default(false) @map("is_admin")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  posts         Post[]
+  comments      Comment[]
+  likes         Like[]
+  followers     Follow[]        @relation("Following")
+  following     Follow[]        @relation("Follower")
+  preferences   UserPreference?
+  refreshTokens RefreshToken[]
+  notifications Notification[]
+  bookmarks     Bookmark[]
+  reports       Report[]        @relation("ReportReporter")
+  reportedContent Report[]       @relation("ReportedContent")
+
+  @@map("users")
+}
+
+model Topic {
+  id          Int     @id @default(autoincrement())
+  name        String  @db.VarChar(100)
+  description String? @db.Text
+
+  posts PostTopic[]
+
+  @@map("topics")
+}
+
+model Post {
+  id             Int      @id @default(autoincrement())
+  content        String   @db.Text
+  authorId       Int      @map("author_id")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @map("updated_at") @db.Timestamptz
+  likesCount     Int      @default(0) @map("likes_count")
+  commentsCount  Int      @default(0) @map("comments_count")
+
+  author    User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  comments  Comment[]
+  likes     Like[]
+  topics    PostTopic[]
+  bookmarks Bookmark[]
+
+  @@map("posts")
+}
+
+model PostTopic {
+  postId  Int @map("post_id")
+  topicId Int @map("topic_id")
+
+  post  Post  @relation(fields: [postId], references: [id], onDelete: Cascade)
+  topic Topic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  @@id([postId, topicId])
+  @@map("post_topics")
+}
+
+model Comment {
+  id        Int      @id @default(autoincrement())
+  content   String   @db.Text
+  postId    Int      @map("post_id")
+  authorId  Int      @map("author_id")
+  parentId  Int?     @map("parent_id")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  post    Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author  User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parent  Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies Comment[] @relation("CommentReplies")
+
+  @@map("comments")
+}
+
+model Like {
+  userId    Int      @map("user_id")
+  postId    Int      @map("post_id")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@id([userId, postId])
+  @@map("likes")
+}
+
+model Follow {
+  followerId  Int      @map("follower_id")
+  followingId Int      @map("following_id")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  follower  User @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@id([followerId, followingId])
+  @@map("follows")
+}
+
+model UserPreference {
+  userId    Int      @id @map("user_id")
+  topicIds Int[]    @default([]) @map("topic_ids")
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_preferences")
+}
+
+model RefreshToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  tokenHash String   @map("token_hash") @db.VarChar(255)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+model Notification {
+  id             Int      @id @default(autoincrement())
+  userId         Int      @map("user_id")
+  type           String   @db.VarChar(50)
+  data           Json     @default("{}")
+  actorAvatarUrl String?  @map("actor_avatar_url") @db.Text
+  isRead         Boolean  @default(false) @map("is_read")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+model Bookmark {
+  userId    Int      @map("user_id")
+  postId    Int      @map("post_id")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@id([userId, postId])
+  @@map("bookmarks")
+}
+
+model Hashtag {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique @db.VarChar(100)
+  postCount Int      @default(0) @map("post_count")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("hashtags")
+}
+
+model Report {
+  id         Int      @id @default(autoincrement())
+  reporterId Int      @map("reporter_id")
+  targetType String   @map("target_type") @db.VarChar(20)
+  targetId  Int      @map("target_id")
+  reason     String   @db.Text
+  status    String   @default("pending") @db.VarChar(20)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  reporter        User  @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  reportedContent User? @relation("ReportedContent", fields: [targetId], references: [id], map: "fk_reported_user")
+
+  @@map("reports")
+}

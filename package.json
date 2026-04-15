@@ -1,4 +1,9 @@
 {
+  "name": "social-network",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "cd api && npm install && npm run build && cd ../frontend && npm install && npm run build"
+  },
   "dependencies": {
     "react-router-dom": "^7.14.1"
   }

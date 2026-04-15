@@ -5,6 +5,7 @@ import TopicSelector from '../../components/ui/TopicSelector'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { useTheme } from '../../context/ThemeContext'
+import { changePasswordSchema } from '../../validators/schemas'
 
 export default function SettingsPage() {
   const { user, logout } = useAuth()
@@ -19,6 +20,7 @@ export default function SettingsPage() {
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [selectedTopics, setSelectedTopics] = useState<number[]>([])
+  const [pwErrors, setPwErrors] = useState<Record<string, string>>({})
 
   const { data: preferences } = useQuery({
     queryKey: ['preferences'],
@@ -39,15 +41,29 @@ export default function SettingsPage() {
 
   const changePasswordMutation = useMutation({
     mutationFn: () => {
-      if (newPassword !== confirmPassword) throw new Error('Mật khẩu mới không khớp')
-      if (newPassword.length < 6) throw new Error('Mật khẩu mới phải có ít nhất 6 ký tự')
+      const result = changePasswordSchema.safeParse({
+        current_password: currentPassword,
+        new_password: newPassword,
+        confirm_password: confirmPassword,
+      })
+      if (!result.success) {
+        const errors: Record<string, string> = {}
+        for (const issue of result.error.issues) {
+          errors[issue.path.join('.')] = issue.message
+        }
+        setPwErrors(errors)
+        throw new Error('Validation failed')
+      }
       return usersApi.changePassword(currentPassword, newPassword)
     },
     onSuccess: () => {
-      setCurrentPassword(''); setNewPassword(''); setConfirmPassword('')
+      setCurrentPassword(''); setNewPassword(''); setConfirmPassword(''); setPwErrors({})
       showToast('Đổi mật khẩu thành công!', 'success')
     },
-    onError: (err: any) => showToast(err.message || 'Đổi mật khẩu thất bại', 'error'),
+    onError: (err: unknown) => {
+      const msg = (err as Error).message
+      if (msg !== 'Validation failed') showToast(msg || 'Đổi mật khẩu thất bại', 'error')
+    },
   })
 
   const updatePreferencesMutation = useMutation({
@@ -67,7 +83,9 @@ export default function SettingsPage() {
 
   const cardClass = 'bg-white dark:bg-dark-card rounded-xl border border-gray-200 dark:border-dark-border p-6 space-y-4'
   const labelClass = 'block text-sm font-medium text-gray-600 dark:text-dark-muted mb-1'
-  const inputClass = 'w-full border border-gray-200 dark:border-dark-border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text placeholder:text-gray-400'
+  const inputClass = 'w-full border border-gray-200 dark:border-dark-border rounded-lg px-3 py-2 text-sm outline-none bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text placeholder:text-gray-400'
+  const errInputClass = 'w-full border border-red-500 rounded-lg px-3 py-2 text-sm outline-none bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text'
+  const errText = 'text-xs text-red-500 mt-1'
 
   return (
     <div className="max-w-xl mx-auto space-y-4">
@@ -78,21 +96,23 @@ export default function SettingsPage() {
         <h2 className="font-semibold text-gray-700 dark:text-dark-text">Thông tin cá nhân</h2>
         <div>
           <label className={labelClass}>Tên đăng nhập</label>
-          <input type="text" value={username} onChange={e => setUsername(e.target.value)} className={inputClass} />
+          <input type="text" value={username} onChange={e => setUsername(e.target.value)}
+            className={inputClass} />
         </div>
         <div>
           <label className={labelClass}>Email</label>
-          <input type="email" value={user?.email || ''} disabled className={`${inputClass} bg-gray-50 dark:bg-dark-border cursor-not-allowed opacity-60`} />
+          <input type="email" value={user?.email || ''} disabled
+            className={`${inputClass} bg-gray-50 dark:bg-dark-border cursor-not-allowed opacity-60`} />
         </div>
         <div>
           <label className={labelClass}>Ngày sinh</label>
-          <input type="date" value={dateOfBirth} onChange={e => setDateOfBirth(e.target.value)} className={inputClass} />
+          <input type="date" value={dateOfBirth} onChange={e => setDateOfBirth(e.target.value)}
+            className={inputClass} />
         </div>
         <div>
           <label className={labelClass}>URL Ảnh đại diện</label>
           <input type="url" value={avatarUrl} onChange={e => setAvatarUrl(e.target.value)}
             className={inputClass} placeholder="https://example.com/avatar.jpg" />
-          <p className="text-xs text-gray-400 dark:text-dark-muted mt-1">Nhập URL hình ảnh để cập nhật ảnh đại diện (sẽ cập nhật sau)</p>
         </div>
         <div className="pt-2">
           <button onClick={() => updateProfileMutation.mutate()} disabled={updateProfileMutation.isPending}
@@ -107,18 +127,24 @@ export default function SettingsPage() {
         <h2 className="font-semibold text-gray-700 dark:text-dark-text">Đổi mật khẩu</h2>
         <div>
           <label className={labelClass}>Mật khẩu hiện tại</label>
-          <input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)}
-            className={inputClass} placeholder="••••••••" />
+          <input type="password" value={currentPassword} onChange={e => { setCurrentPassword(e.target.value); setPwErrors((p) => ({ ...p, current_password: '' })) }}
+            className={pwErrors.current_password ? errInputClass : inputClass}
+            placeholder="••••••••" />
+          {pwErrors.current_password && <p className={errText}>{pwErrors.current_password}</p>}
         </div>
         <div>
           <label className={labelClass}>Mật khẩu mới</label>
-          <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)}
-            className={inputClass} placeholder="Tối thiểu 6 ký tự" />
+          <input type="password" value={newPassword} onChange={e => { setNewPassword(e.target.value); setPwErrors((p) => ({ ...p, new_password: '' })) }}
+            className={pwErrors.new_password ? errInputClass : inputClass}
+            placeholder="Tối thiểu 8 ký tự" />
+          {pwErrors.new_password && <p className={errText}>{pwErrors.new_password}</p>}
         </div>
         <div>
           <label className={labelClass}>Xác nhận mật khẩu mới</label>
-          <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
-            className={inputClass} placeholder="Nhập lại mật khẩu mới" />
+          <input type="password" value={confirmPassword} onChange={e => { setConfirmPassword(e.target.value); setPwErrors((p) => ({ ...p, confirm_password: '' })) }}
+            className={pwErrors.confirm_password ? errInputClass : inputClass}
+            placeholder="Nhập lại mật khẩu mới" />
+          {pwErrors.confirm_password && <p className={errText}>{pwErrors.confirm_password}</p>}
         </div>
         <div className="pt-2">
           <button onClick={() => changePasswordMutation.mutate()}
@@ -149,15 +175,11 @@ export default function SettingsPage() {
         <h2 className="font-semibold text-gray-700 dark:text-dark-text">Giao diện</h2>
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-medium text-gray-800 dark:text-dark-text">Chế độ tối</p>
-            <p className="text-xs text-gray-500 dark:text-dark-muted mt-0.5">
-              {theme === 'dark' ? 'Đang bật chế độ tối 🌙' : 'Đang bật chế độ sáng ☀️'}
-            </p>
+            <p className="text-sm font-medium text-gray-800 dark:text-dark-text">{theme === 'dark' ? 'Chế độ tối 🌙' : 'Chế độ sáng ☀️'}</p>
+            <p className="text-xs text-gray-500 dark:text-dark-muted mt-0.5">{theme === 'dark' ? 'Đang bật chế độ tối' : 'Đang bật chế độ sáng'}</p>
           </div>
-          <button
-            onClick={toggleTheme}
-            className="px-4 py-2 rounded-lg text-sm font-medium border border-gray-200 dark:border-dark-border bg-gray-50 dark:bg-dark-bg text-gray-700 dark:text-dark-text hover:bg-gray-100 dark:hover:bg-dark-border transition-colors"
-          >
+          <button onClick={toggleTheme}
+            className="px-4 py-2 rounded-lg text-sm font-medium border border-gray-200 dark:border-dark-border bg-gray-50 dark:bg-dark-bg text-gray-700 dark:text-dark-text hover:bg-gray-100 dark:hover:bg-dark-border transition-colors">
             {theme === 'dark' ? '☀️ Chế độ sáng' : '🌙 Chế độ tối'}
           </button>
         </div>
