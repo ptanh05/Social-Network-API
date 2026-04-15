@@ -1,5 +1,4 @@
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from '@vercel/edge';
 
 const ALLOWED_ORIGINS = [
   'http://localhost:5173',
@@ -17,27 +16,23 @@ export function middleware(request: NextRequest) {
 
   const allowedOrigin = ALLOWED_ORIGINS.includes(origin)
     ? origin
-    : ALLOWED_ORIGINS[2]; // fallback to production
+    : ALLOWED_ORIGINS[2];
 
-  // Handle preflight OPTIONS — must not reach serverless function
+  const headers: Record<string, string> = {
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+    'Access-Control-Allow-Credentials': 'true',
+    'Access-Control-Max-Age': '86400',
+  };
+
+  // Handle preflight
   if (request.method === 'OPTIONS') {
-    return new NextResponse(null, {
-      status: 204,
-      headers: {
-        'Access-Control-Allow-Origin': allowedOrigin,
-        'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type,Authorization',
-        'Access-Control-Allow-Credentials': 'true',
-        'Access-Control-Max-Age': '86400',
-      },
-    });
+    return new NextResponse(null, { status: 204, headers });
   }
 
   // Add CORS headers to normal responses
   const response = NextResponse.next();
-  response.headers.set('Access-Control-Allow-Origin', allowedOrigin);
-  response.headers.set('Access-Control-Allow-Credentials', 'true');
-  response.headers.set('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
-  response.headers.set('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+  Object.entries(headers).forEach(([k, v]) => response.headers.set(k, v));
   return response;
 }
