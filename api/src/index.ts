@@ -17,7 +17,7 @@ import { withAuth } from './middleware/auth.js';
 import { ok } from './lib/utils.js';
 
 const app = express();
-// Strip /api prefix so /api/v1/* becomes /v1/*
+// Strip /api prefix so /api/v1/* becomes /v1/* on Vercel rewrites
 app.use((req, _res, next) => {
   if (req.path.startsWith('/api')) req.url = req.url.replace(/^\/api/, '');
   next();
@@ -34,7 +34,6 @@ app.use(express.json());
 
 app.get('/health', (_req, res) => ok(res, { status: 'ok' }));
 app.get('/api/v1/health', (_req, res) => ok(res, { status: 'ok' }));
-
 app.use('/api/v1/auth', authRouter);
 app.use('/api/v1/users', usersRouter);
 app.use('/api/v1/posts', postsRouter);
@@ -62,7 +61,6 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
   res.status(500).json({ detail: 'Internal server error' });
 });
 
-// Start server only locally (not on Vercel)
 if (!process.env.VERCEL) {
   const PORT = parseInt(process.env.PORT || '3001', 10);
   app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

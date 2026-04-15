@@ -20,9 +20,9 @@ router.get('/', withAuth(async (req: AuthRequest, res: Response) => {
     include: { post: { include: { author: { select: { id: true, username: true, email: true, dateOfBirth: true, isAdmin: true, createdAt: true } }, topics: { include: { topic: true } } } } },
   });
   const hasMore = bookmarks.length > limit;
-  const posts = bookmarks.slice(0, limit).map((b) => ({
+  const posts = bookmarks.slice(0, limit).map((b: typeof bookmarks[number]) => ({
     id: b.post.id, content: b.post.content, author_id: b.post.authorId, created_at: b.post.createdAt, updated_at: b.post.updatedAt, likes_count: b.post.likesCount, comments_count: b.post.commentsCount,
-    topics: b.post.topics.map((pt) => ({ id: pt.topic.id, name: pt.topic.name, description: pt.topic.description })),
+    topics: b.post.topics.map((pt: typeof b.post.topics[number]) => ({ id: pt.topic.id, name: pt.topic.name, description: pt.topic.description })),
     author: { id: b.post.author.id, username: b.post.author.username, email: b.post.author.email, date_of_birth: b.post.author.dateOfBirth, is_admin: b.post.author.isAdmin, created_at: b.post.author.createdAt },
   }));
   return ok(res, { posts, next_cursor: hasMore && bookmarks.length > 0 ? String(bookmarks[bookmarks.length - 1]?.createdAt) : null });

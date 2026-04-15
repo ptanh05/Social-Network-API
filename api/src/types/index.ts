@@ -1,10 +1,9 @@
 import { Request } from 'express';
-import { PrismaClient } from '@prisma/client';
 import { Pool } from 'pg';
-import { PrismaPg } from '@prisma/adapter-pg';
 
-// Re-export Prisma types
-export type { User, Post, Topic, Comment, Like, Follow, Notification, Bookmark, RefreshToken, UserPreference, Hashtag, Report } from '@prisma/client';
+// PrismaClient types via generated .prisma/client
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type PrismaClientType = any;
 
 // ─── Auth user (attached to request) ──────────────────────────────────────────
 export interface AuthUser {
@@ -18,7 +17,11 @@ export interface AuthUser {
 export type AuthRequest = Request & { user?: AuthUser };
 
 // ─── Prisma Client ────────────────────────────────────────────────────────────
-function createPrismaClient(): PrismaClient {
+function createPrismaClient(): PrismaClientType {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { PrismaPg } = require('@prisma/adapter-pg');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { PrismaClient } = require('@prisma/client');
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) throw new Error('DATABASE_URL is not set');
   const pool = new Pool({ connectionString });
@@ -26,6 +29,6 @@ function createPrismaClient(): PrismaClient {
   return new PrismaClient({ adapter });
 }
 
-const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
-export const prisma = globalForPrisma.prisma || createPrismaClient();
+const globalForPrisma = globalThis as unknown as { prisma: PrismaClientType };
+export const prisma: PrismaClientType = globalForPrisma.prisma || createPrismaClient();
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
