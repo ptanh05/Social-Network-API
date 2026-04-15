@@ -1,6 +1,5 @@
 import 'dotenv/config';
 import express from 'express';
-import cors from 'cors';
 import { prisma, AuthUser, AuthRequest } from './dist/types/index.js';
 import { hashPassword, verifyPassword } from './dist/lib/bcrypt.js';
 import { signAccessToken, signRefreshToken, verifyToken } from './dist/lib/jwt.js';
@@ -8,15 +7,27 @@ import { ok, created, err, noContent } from './dist/lib/utils.js';
 import { z } from 'zod';
 import { withLoginLimit } from './dist/middleware/rateLimit.js';
 
+const ALLOWED_ORIGINS = [
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'https://social-network-api-seven.vercel.app',
+  'https://social-network-aplqf0k.onrender.com',
+];
+
 const app = express();
-app.use(cors({
-  origin: [
-    'http://localhost:5173',
-    'http://localhost:5174',
-    'https://social-network-api-seven.vercel.app',
-  ],
-  credentials: true,
-}));
+
+// Manual CORS middleware — more reliable on Vercel than the cors package
+app.use((req, res, next) => {
+  const origin = req.headers.origin ?? '';
+  const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
+
 app.use(express.json());
 
 // ─── Helpers ─────────────────────────────────────────────────────
@@ -63,7 +74,7 @@ function safeLimit(req: express.Request): number {
 function validate(schema: z.ZodSchema) {
   return (req: express.Request, res: express.Response, next: express.NextFunction) => {
     const parsed = schema.safeParse(req.body);
-    if (!parsed.success) return err(res, 400, parsed.error.errors[0].message);
+    if (!parsed.success) return err(res, 400, parsed.error.issues[0].message);
     next();
   };
 }

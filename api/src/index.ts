@@ -1,21 +1,32 @@
 import 'dotenv/config';
 import express from 'express';
-import cors from 'cors';
 import { prisma, AuthUser, AuthRequest } from './types/index.js';
 import { hashPassword, verifyPassword } from './lib/bcrypt.js';
 import { signAccessToken, signRefreshToken, verifyToken } from './lib/jwt.js';
 import { ok, created, err, noContent } from './lib/utils.js';
 import { z } from 'zod';
 
+const ALLOWED_ORIGINS = [
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'https://social-network-api-seven.vercel.app',
+  'https://social-network-aplqf0k.onrender.com',
+];
+
 const app = express();
-app.use(cors({
-  origin: [
-    'http://localhost:5173',
-    'http://localhost:5174',
-    'https://social-network-api-seven.vercel.app',
-  ],
-  credentials: true,
-}));
+
+// Manual CORS — no external package, more reliable on Vercel
+app.use((req, res, next) => {
+  const origin = req.headers.origin ?? '';
+  const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
+
 app.use(express.json());
 
 // ─── Helpers ─────────────────────────────────────────────────────
