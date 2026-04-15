@@ -5,6 +5,7 @@ const ALLOWED_ORIGINS = [
   'http://localhost:5173',
   'http://localhost:5174',
   'https://social-network-api-seven.vercel.app',
+  'https://social-network-aplqf0k.onrender.com',
 ];
 
 export const config = {
@@ -13,7 +14,10 @@ export const config = {
 
 export function middleware(request: NextRequest) {
   const origin = request.headers.get('origin') ?? '';
-  const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+
+  const allowedOrigin = ALLOWED_ORIGINS.includes(origin)
+    ? origin
+    : ALLOWED_ORIGINS[2]; // fallback to production
 
   // Handle preflight OPTIONS — must not reach serverless function
   if (request.method === 'OPTIONS') {
@@ -29,7 +33,7 @@ export function middleware(request: NextRequest) {
     });
   }
 
-  // For all other requests, add CORS headers and continue
+  // Add CORS headers to normal responses
   const response = NextResponse.next();
   response.headers.set('Access-Control-Allow-Origin', allowedOrigin);
   response.headers.set('Access-Control-Allow-Credentials', 'true');
