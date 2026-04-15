@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "tsx watch --env-file=../.env src/index.ts",
     "build": "prisma generate && tsc -p tsconfig.json",
-    "postbuild": "node -e \"const fs=require('fs');fs.writeFileSync('index.js','import dotenv from \\\"dotenv\\\";dotenv.config();import app from \\\"./dist/index.js\\\";export default app;\\n');\"",
     "start": "node --env-file=../.env index.js",
     "typecheck": "tsc --noEmit"
   },
