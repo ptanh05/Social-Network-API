@@ -9,6 +9,7 @@ import { useToast } from '../../context/ToastContext';
 import { NotificationSkeleton } from '../../components/ui/Skeleton';
 import Avatar from '../../components/ui/Avatar';
 import { useInfiniteScroll } from '../../hooks/useInfiniteScroll';
+import { usersApi } from '../../services/users';
 
 function timeAgo(dateStr: string) {
     const now = Date.now();
@@ -35,8 +36,8 @@ function getNotificationIcon(type: Notification['type']) {
     }
 }
 
-function getNotificationText(n: Notification) {
-    const actor = n.data.actor_username || 'Ai đó';
+function getNotificationText(n: Notification, actorName?: string) {
+    const actor = n.data.actor_username || actorName || 'Ai đó';
     switch (n.type) {
         case 'like':
             return `${actor} đã thích bài viết của bạn`;
@@ -52,8 +53,11 @@ function getNotificationText(n: Notification) {
 }
 
 function getNotificationLink(n: Notification): string {
-    if (n.data.post_id) return `/posts/${n.data.post_id}`;
-    if (n.data.actor_id) return `/profile/${n.data.actor_id}`;
+    const postId = n.data.post_id ?? (n.data as { postId?: number }).postId;
+    const actorId = n.data.actor_id ?? (n.data as { actorId?: number }).actorId;
+
+    if (postId) return `/posts/${postId}`;
+    if (actorId) return `/profile/${actorId}`;
     return '/notifications';
 }
 
@@ -68,11 +72,24 @@ function NotificationItem({
 }: NotificationItemProps) {
     const link = getNotificationLink(n);
     const navigate = useNavigate();
+    const { data: actorUser } = useQuery({
+        queryKey: ['notification-actor', n.data.actor_id],
+        queryFn: () => usersApi.getUser(Number(n.data.actor_id)),
+        enabled: !!n.data.actor_id && !n.data.actor_username
+    });
+
+    const resolvedActorName = n.data.actor_username || actorUser?.username;
+    const resolvedActorAvatarUrl = n.actor_avatar_url || actorUser?.avatar_url;
+    const postId = n.data.post_id ?? (n.data as { postId?: number }).postId;
 
     const handleClick = (e: React.MouseEvent) => {
         if ((e.target as HTMLElement).closest('.avatar-link')) return;
         e.preventDefault();
         if (!n.is_read) onMarkRead(n.id);
+        if (postId) {
+            navigate(`/posts/${postId}`);
+            return;
+        }
         navigate(link);
     };
 
@@ -87,15 +104,15 @@ function NotificationItem({
         >
             {/* Avatar / Icon */}
             <div className='shrink-0'>
-                {n.data.actor_id && n.data.actor_username ? (
+                {n.data.actor_id ? (
                     <Link
                         to={`/profile/${n.data.actor_id}`}
                         className='avatar-link'
                         onClick={(e) => e.stopPropagation()}
                     >
                         <Avatar
-                            username={n.data.actor_username}
-                            avatarUrl={n.actor_avatar_url}
+                            username={resolvedActorName || 'Ai đó'}
+                            avatarUrl={resolvedActorAvatarUrl}
                         />
                     </Link>
                 ) : (
@@ -110,7 +127,7 @@ function NotificationItem({
                 <p
                     className={`text-sm ${n.is_read ? 'text-gray-600 dark:text-gray-400' : 'text-gray-900 dark:text-gray-100'} font-medium`}
                 >
-                    {getNotificationText(n)}
+                    {getNotificationText(n, actorUser?.username)}
                 </p>
                 {n.data.message && (
                     <p className='text-xs text-gray-500 dark:text-gray-500 mt-1 truncate'>
@@ -145,13 +162,47 @@ export default function NotificationsPage() {
         enabled: !initializedRef.current
     });
 
-    // Initialize notifications from query data
-    if (initialData && !initializedRef.current) {
+    React.useEffect(() => {
+        if (!initialData || initializedRef.current) return;
+
         initializedRef.current = true;
-        setNotifications(initialData.notifications);
+        setNotifications((prev) => {
+            const merged = [...initialData.notifications, ...prev];
+            const unique = Array.from(
+                new Map(merged.map((item) => [item.id, item])).values()
+            );
+            unique.sort((a, b) => b.id - a.id);
+            return unique;
+        });
         setCursor(initialData.next_cursor);
         setHasMore(initialData.next_cursor !== null);
-    }
+    }, [initialData]);
+
+    React.useEffect(() => {
+        const handleNewNotification = (event: Event) => {
+            const customEvent = event as CustomEvent<Notification>;
+            const notification = customEvent.detail;
+
+            setNotifications((prev) => {
+                const next = [
+                    notification,
+                    ...prev.filter((item) => item.id !== notification.id)
+                ];
+                return next;
+            });
+        };
+
+        window.addEventListener(
+            'notifications:new',
+            handleNewNotification as EventListener
+        );
+        return () => {
+            window.removeEventListener(
+                'notifications:new',
+                handleNewNotification as EventListener
+            );
+        };
+    }, []);
 
     const loadMore = useCallback(async () => {
         if (!hasMore || isLoadingMore || cursor === null) return;

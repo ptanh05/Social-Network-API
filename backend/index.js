@@ -31,16 +31,47 @@ function verifyToken(token) {
 
 async function getUserFromToken(req) {
     const auth = req.headers.authorization;
-    if (!auth || !auth.startsWith('Bearer ')) return null;
-    const payload = verifyToken(auth.slice(7));
+    const tokenFromQuery = req.query?.access_token;
+    const token =
+        auth && auth.startsWith('Bearer ') ? auth.slice(7) : tokenFromQuery;
+    if (!token) return null;
+    const payload = verifyToken(token);
     if (!payload) return null;
     const { rows } = await sql`SELECT * FROM users WHERE id = ${payload.sub}`;
     return rows[0] || null;
 }
 
 // ─── Notification Helper ──────────────────────────────────────────────────────
+const notificationClients = new Map();
+
+function writeSseEvent(res, event, data) {
+    if (event) res.write(`event: ${event}\n`);
+    if (data !== undefined) {
+        const payload = typeof data === 'string' ? data : JSON.stringify(data);
+        for (const line of payload.split('\n')) {
+            res.write(`data: ${line}\n`);
+        }
+    }
+    res.write('\n');
+}
+
+function broadcastNotification(userId, notification) {
+    const clients = notificationClients.get(Number(userId));
+    if (!clients || clients.size === 0) return;
+
+    for (const client of clients) {
+        writeSseEvent(client, 'notification', { notification });
+    }
+}
+
 async function createNotification(userId, type, data, actorAvatarUrl) {
-    await sql`INSERT INTO notifications (user_id, type, data, actor_avatar_url) VALUES (${userId}, ${type}, ${JSON.stringify(data)}, ${actorAvatarUrl || null})`;
+    const { rows } = await sql`
+      INSERT INTO notifications (user_id, type, data, actor_avatar_url)
+      VALUES (${userId}, ${type}, ${JSON.stringify(data)}, ${actorAvatarUrl || null})
+      RETURNING id, user_id, type, data, actor_avatar_url, is_read, created_at`;
+    const notification = rows[0];
+    if (notification) broadcastNotification(userId, notification);
+    return notification;
 }
 
 // ─── Rate Limiter ────────────────────────────────────────────────────────────
@@ -1161,6 +1192,74 @@ async function GET_like_status(req, res, postId) {
     return ok(res, { liked: rows.length > 0 });
 }
 
+function normalizeNotificationData(rawData) {
+    let data = {};
+
+    if (typeof rawData === 'string') {
+        try {
+            const parsed = JSON.parse(rawData);
+            if (parsed && typeof parsed === 'object') {
+                data = parsed;
+            }
+        } catch {
+            data = {};
+        }
+    } else if (rawData && typeof rawData === 'object') {
+        data = rawData;
+    }
+
+    return {
+        actor_username: data.actor_username || data.actorUsername,
+        actor_id: data.actor_id ?? data.actorId,
+        post_id: data.post_id ?? data.postId,
+        comment_id: data.comment_id ?? data.commentId,
+        message: data.message || data.messageText
+    };
+}
+
+async function enrichNotifications(rows) {
+    const actorIds = [
+        ...new Set(
+            rows
+                .map((row) =>
+                    Number(normalizeNotificationData(row.data).actor_id)
+                )
+                .filter((actorId) => Number.isFinite(actorId))
+        )
+    ];
+
+    const actorMap = new Map();
+    if (actorIds.length > 0) {
+        const { rows: users } = await sql`
+      SELECT id, username, avatar_url
+      FROM users
+      WHERE id = ANY(${actorIds})`;
+
+        for (const user of users) {
+            actorMap.set(Number(user.id), user);
+        }
+    }
+
+    return rows.map((row) => {
+        const normalizedData = normalizeNotificationData(row.data);
+        const actorId = Number(normalizedData.actor_id);
+        const actor = Number.isFinite(actorId) ? actorMap.get(actorId) : null;
+        return {
+            ...row,
+            data: {
+                ...normalizedData,
+                actor_username:
+                    normalizedData.actor_username || actor?.username,
+                actor_id: normalizedData.actor_id ?? actor?.id,
+                post_id: normalizedData.post_id,
+                comment_id: normalizedData.comment_id,
+                message: normalizedData.message
+            },
+            actor_avatar_url: row.actor_avatar_url || actor?.avatar_url || ''
+        };
+    });
+}
+
 // ─── GET /api/v1/notifications/ ───────────────────────────────────────────────
 async function GET_notifications(req, res) {
     const user = await getUserFromToken(req);
@@ -1182,12 +1281,45 @@ async function GET_notifications(req, res) {
       ORDER BY id DESC LIMIT ${limit + 1}`;
     }
     const { rows } = await query;
+    const enrichedRows = await enrichNotifications(rows);
     const hasMore = rows.length > limit;
-    const items = rows.slice(0, limit);
+    const items = enrichedRows.slice(0, limit);
 
     const next_cursor =
         hasMore && items.length > 0 ? String(items[items.length - 1].id) : null;
     return ok(res, { notifications: items, next_cursor });
+}
+
+// ─── GET /api/v1/notifications/stream ────────────────────────────────────────
+async function GET_notifications_stream(req, res) {
+    const user = await getUserFromToken(req);
+    if (!user) return err(res, 401, 'Could not validate credentials');
+
+    req.setTimeout(0);
+    res.status(200);
+    res.set({
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no'
+    });
+    res.flushHeaders?.();
+    res.write(': connected\n\n');
+
+    const userId = Number(user.id);
+    const clients = notificationClients.get(userId) || new Set();
+    clients.add(res);
+    notificationClients.set(userId, clients);
+
+    const heartbeat = setInterval(() => {
+        if (!res.writableEnded) res.write(': heartbeat\n\n');
+    }, 30000);
+
+    req.on('close', () => {
+        clearInterval(heartbeat);
+        clients.delete(res);
+        if (clients.size === 0) notificationClients.delete(userId);
+    });
 }
 
 // ─── GET /api/v1/notifications/unread-count ───────────────────────────────────
@@ -1374,6 +1506,7 @@ app.get('/api/v1/likes/posts/:id/status/', (req, res) =>
 );
 app.get('/api/v1/notifications/', GET_notifications);
 app.get('/api/v1/notifications/unread-count', GET_notifications_unread);
+app.get('/api/v1/notifications/stream', GET_notifications_stream);
 app.get('/api/v1/bookmarks/', GET_bookmarks);
 app.get('/api/v1/bookmarks/posts/:id/status', (req, res) =>
     GET_bookmark_status(req, res, req.params.id)
