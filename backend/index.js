@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import { initDb, sql } from './db.js';
+import { initDb, sql, sqlUnsafe } from './db.js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
@@ -1150,10 +1150,10 @@ async function PUT_update_preferences(req, res) {
     if (!Array.isArray(topic_ids))
         return err(res, 400, 'topic_ids must be an array');
 
-    await sql`
-    INSERT INTO user_preferences (user_id, topic_ids, updated_at)
-    VALUES (${user.id}, ${topic_ids}, NOW())
-    ON CONFLICT (user_id) DO UPDATE SET topic_ids = ${topic_ids}, updated_at = NOW()`;
+    const { rowCount } = await sql`UPDATE user_preferences SET topic_ids = ${topic_ids}, updated_at = NOW() WHERE user_id = ${user.id}`;
+    if (!rowCount) {
+        await sql`INSERT INTO user_preferences (user_id, topic_ids, updated_at) VALUES (${user.id}, ${topic_ids}, NOW())`;
+    }
 
     const { rows: topicRows } =
         await sql`SELECT * FROM topics WHERE id = ANY(${topic_ids})`;

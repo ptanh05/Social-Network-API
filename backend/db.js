@@ -1,57 +1,42 @@
 import 'dotenv/config'
 
-// ─── DB Client — supports both Vercel (POSTGRES_URL) and Render (DATABASE_URL) ───
+// ─── DB Client ────────────────────────────────────────────────────────────────
 let _sql
 
 if (process.env.POSTGRES_URL) {
-  // Vercel environment
   const { createClient } = await import('@vercel/postgres')
   const client = createClient()
   await client.connect()
   _sql = client
 } else if (process.env.DATABASE_URL) {
-  // Render / any standard PostgreSQL environment using 'postgres' library
   const postgres = (await import('postgres')).default
   _sql = postgres(process.env.DATABASE_URL)
 } else {
-  console.warn('⚠️  Neither POSTGRES_URL nor DATABASE_URL set — db.js loaded but no DB connection. Will retry on first query.')
+  console.warn('⚠️  Neither POSTGRES_URL nor DATABASE_URL set')
   _sql = null
 }
 
-// ─── Safe placeholder sql (no-ops until first real request) ──────────────────
-if (!_sql) {
-  _sql = {
-    unsafe: () => {
-      throw new Error('Database not initialized yet. Set DATABASE_URL or POSTGRES_URL env vars.')
-    },
-  }
-}
-
-// Tagged template literal — works with @vercel/postgres and postgres.js
-// rawStrings[0] is the query with ${placeholders}
-// values is the array of interpolated values
-// const sql = (rawStrings, ...values) => {
-//   return _sql.unsafe(rawStrings[0], values)
-// }
-// Tagged template literal — works with @vercel/postgres and postgres.js
+// ─── sql tagged template literal ─────────────────────────────────────────────
+// @vercel/postgres: result already has { rows, rowCount }
+// postgres.js: result is a Result(rows[], count) — we normalize to { rows, count, rowCount }
 const sql = async (rawStrings, ...values) => {
-  const result = await _sql(rawStrings, ...values)
-
-  // @vercel/postgres: result đã là object có rows/rowCount
+  if (!_sql) throw new Error('Database not initialized')
   if (process.env.POSTGRES_URL) {
-    return {
-      rows: result?.rows || [],
-      rowCount: Number(result?.rowCount || 0),
-    }
-  }
-
-  // postgres.js: result là mảng rows, có thể có thêm .count
-  return {
-    rows: result || [],
-    rowCount: Number(result?.count ?? result?.length ?? 0),
+    return await _sql(rawStrings, ...values)
+  } else {
+    const result = await _sql(rawStrings, ...values)
+    const rows = [...result]
+    return { rows, count: result.count, rowCount: result.count }
   }
 }
-// ─── Schema Init ─────────────────────────────────────────────────────────────
+
+// Unsafe raw SQL — bypasses prepared statement cache (avoids cached plan errors)
+export const sqlUnsafe = (...args) => {
+  if (!_sql) throw new Error('Database not initialized')
+  return _sql.unsafe(...args)
+}
+
+// ─── Schema ───────────────────────────────────────────────────────────────────
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
@@ -142,7 +127,9 @@ CREATE TABLE IF NOT EXISTS notifications (
 
 CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id ON refresh_tokens(user_id);
+`
 
+const SEED_TOPICS = `
 INSERT INTO topics (name, description) VALUES
   ('Thể thao', 'Các bài viết về thể thao'),
   ('Công nghệ', 'Công nghệ, lập trình, AI'),
@@ -161,19 +148,66 @@ let initialized = false
 
 export async function initDb() {
   if (initialized) return
-  if (!_sql || !process.env.POSTGRES_URL && !process.env.DATABASE_URL) {
+  if (!_sql) {
     console.warn('⚠️  initDb skipped: no database connection configured')
     return
   }
   try {
     await _sql.unsafe('SELECT 1')
-    await _sql.unsafe(SCHEMA)
-    initialized = true
-    console.log('✅ Database schema ready')
   } catch (e) {
     console.error('❌ DB init failed:', e.message)
-    // Do not throw — let the server start and let runtime queries fail with a clear error
+    return
   }
+  try {
+    await _sql.unsafe(SCHEMA)
+  } catch (e) {
+    if (!e.message.includes('already exists')) console.warn('⚠️  Schema:', e.message)
+  }
+  try {
+    await _sql.unsafe(SEED_TOPICS)
+  } catch (e) {
+    if (!e.message.includes('duplicate')) console.warn('⚠️  Seed topics:', e.message)
+  }
+  // Run each migration separately so one failure doesn't block the rest
+  const migrationSteps = [
+    'ALTER TABLE posts ADD COLUMN IF NOT EXISTS likes_count INTEGER DEFAULT 0',
+    'ALTER TABLE posts ADD COLUMN IF NOT EXISTS comments_count INTEGER DEFAULT 0',
+    'UPDATE posts SET created_at = NOW() WHERE created_at IS NULL',
+    'ALTER TABLE posts ALTER COLUMN created_at DROP NOT NULL',
+    'ALTER TABLE posts ALTER COLUMN created_at SET DEFAULT NOW()',
+    'UPDATE posts SET updated_at = NOW() WHERE updated_at IS NULL',
+    'ALTER TABLE posts ALTER COLUMN updated_at DROP NOT NULL',
+    'ALTER TABLE posts ALTER COLUMN updated_at SET DEFAULT NOW()',
+    'ALTER TABLE comments ALTER COLUMN created_at SET DEFAULT NOW()',
+    'ALTER TABLE comments ALTER COLUMN created_at DROP NOT NULL',
+    'UPDATE comments SET created_at = NOW() WHERE created_at IS NULL',
+    'ALTER TABLE likes ALTER COLUMN created_at DROP NOT NULL',
+    'ALTER TABLE likes ALTER COLUMN created_at SET DEFAULT NOW()',
+    'ALTER TABLE follows ALTER COLUMN created_at DROP NOT NULL',
+    'ALTER TABLE follows ALTER COLUMN created_at SET DEFAULT NOW()',
+    'ALTER TABLE bookmarks ALTER COLUMN created_at DROP NOT NULL',
+    'ALTER TABLE bookmarks ALTER COLUMN created_at SET DEFAULT NOW()',
+    'ALTER TABLE notifications ALTER COLUMN created_at DROP NOT NULL',
+    'ALTER TABLE notifications ALTER COLUMN created_at SET DEFAULT NOW()',
+    'ALTER TABLE refresh_tokens ALTER COLUMN created_at DROP NOT NULL',
+    'ALTER TABLE refresh_tokens ALTER COLUMN created_at SET DEFAULT NOW()',
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(500) DEFAULT NULL',
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS date_of_birth DATE DEFAULT NULL',
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE',
+    'ALTER TABLE users ALTER COLUMN avatar_url SET DEFAULT NULL',
+    'ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()',
+  ]
+  for (const step of migrationSteps) {
+    try {
+      await _sql.unsafe(step)
+    } catch (e) {
+      if (!e.message.includes('already exists') && !e.message.includes('does not exist')) {
+        console.warn(`⚠️  Migration [${step.slice(0, 40)}]: ${e.message}`)
+      }
+    }
+  }
+  initialized = true
+  console.log('✅ Database schema ready')
 }
 
 export { sql }
