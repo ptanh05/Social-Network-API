@@ -13,7 +13,7 @@ app.use(cors({
   origin: [
     'http://localhost:5173',
     'http://localhost:5174',
-    'https://social-network-api-mu.vercel.app',
+    'https://social-network-api-seven.vercel.app',
   ],
   credentials: true,
 }));
