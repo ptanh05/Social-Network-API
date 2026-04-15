@@ -1,5 +1,3 @@
-import { NextRequest, NextResponse } from '@vercel/edge';
-
 const ALLOWED_ORIGINS = [
   'http://localhost:5173',
   'http://localhost:5174',
@@ -11,12 +9,12 @@ export const config = {
   matcher: '/api/:path*',
 };
 
-export function middleware(request: NextRequest) {
+export function middleware(request: Request) {
   const origin = request.headers.get('origin') ?? '';
 
   const allowedOrigin = ALLOWED_ORIGINS.includes(origin)
     ? origin
-    : ALLOWED_ORIGINS[2];
+    : ALLOWED_ORIGINS[2]; // fallback to production
 
   const headers: Record<string, string> = {
     'Access-Control-Allow-Origin': allowedOrigin,
@@ -26,13 +24,13 @@ export function middleware(request: NextRequest) {
     'Access-Control-Max-Age': '86400',
   };
 
-  // Handle preflight
+  // Handle preflight OPTIONS
   if (request.method === 'OPTIONS') {
-    return new NextResponse(null, { status: 204, headers });
+    return new Response(null, { status: 204, headers });
   }
 
   // Add CORS headers to normal responses
-  const response = NextResponse.next();
+  const response = new Response(null, { status: 200 });
   Object.entries(headers).forEach(([k, v]) => response.headers.set(k, v));
   return response;
 }
