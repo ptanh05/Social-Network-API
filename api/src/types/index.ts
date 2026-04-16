@@ -1,7 +1,9 @@
 import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient } from '@prisma/client';
+import prismaClientPkg from '@prisma/client';
 import type { Request } from 'express';
+
+const { PrismaClient } = prismaClientPkg;
 
 // ─── Auth user (attached to request) ──────────────────────────────────────────
 export interface AuthUser {
