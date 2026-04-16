@@ -5,10 +5,11 @@
   "main": "index.js",
   "scripts": {
     "dev": "tsx watch --env-file=../.env src/index.ts",
-    "build": "prisma generate && tsc -p tsconfig.json && node -e \"const fs=require('fs');function cp(src,dest){fs.cpSync(src,dest,{recursive:true,force:true})}cp('dist/types','types');cp('dist/lib','lib');fs.copyFileSync('dist/index.js','index.js');fs.rmSync('dist',{recursive:true,force:true});\"",
+    "build": "prisma generate && tsc -p tsconfig.json && node -e \"const fs=require('fs');fs.rmSync('../server',{recursive:true,force:true});fs.cpSync('dist','../server',{recursive:true,force:true});fs.rmSync('dist',{recursive:true,force:true});\"",
     "start": "node --env-file=../.env index.js",
     "typecheck": "tsc --noEmit",
-    "prisma:generate": "prisma generate"
+    "prisma:generate": "prisma generate",
+    "postinstall": "npm run build"
   },
   "prisma": {
     "generate": "prisma generate"
