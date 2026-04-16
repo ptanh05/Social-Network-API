@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "tsx watch --env-file=../.env src/index.ts",
-    "build": "prisma generate && tsc -p tsconfig.json",
+    "build": "prisma generate && tsc -p tsconfig.json && node -e \"const fs=require('fs');function cp(src,dest){fs.cpSync(src,dest,{recursive:true})}cp('dist/types','types');cp('dist/lib','lib');cp('dist/middleware','middleware');cp('dist/validators','validators');cp('dist/db','db');fs.copyFileSync('dist/index.js','index.js');\"",
     "start": "node --env-file=../.env index.js",
     "typecheck": "tsc --noEmit"
   },
@@ -34,6 +34,7 @@
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^25.6.0",
+    "@types/nodemailer": "^6.9.15",
     "@types/pg": "^8.20.0",
     "prisma": "^7.7.0",
     "tsx": "^4.21.0",
