@@ -9,6 +9,8 @@ const ALLOWED_ORIGINS = [
   'https://social-network-aplqf0k.onrender.com',
   'https://api-roan-rho-71.vercel.app',
   'https://social-network-g68stlz7u-ptanh05s-projects.vercel.app',
+  'https://social-network-9txoa9a5w-ptanh05s-projects.vercel.app',
+  'https://social-network-api-seven.vercel.app',
 ];
 
 export const config = {
