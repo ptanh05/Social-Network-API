@@ -89,7 +89,22 @@ function validate(schema: z.ZodSchema) {
 }
 
 // ─── Schemas ──────────────────────────────────────────────────────
-const registerSchema = z.object({ username: z.string().regex(/^[a-zA-Z0-9_]{4,20}$/).min(4).max(20), email: z.string().email(), password: z.string().min(8), date_of_birth: z.string().optional() });
+const registerSchema = z.object({
+  username: z.string().regex(/^[a-zA-Z0-9_]{4,20}$/, 'Username từ 4-20 ký tự, chỉ gồm chữ cái, số và dấu gạch dưới').min(4, 'Username từ 4-20 ký tự').max(20),
+  email: z.string().email('Email không hợp lệ'),
+  password: z.string().min(8, 'Mật khẩu phải có ít nhất 8 ký tự'),
+  date_of_birth: z.string().optional(),
+});
+
+const registerValidation = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const parsed = registerSchema.safeParse(req.body);
+  if (!parsed.success) {
+    const msg = parsed.error.issues.map(i => i.message).join('; ');
+    return err(res, 400, msg);
+  }
+  next();
+};
+
 const loginSchema = z.object({ username: z.string().min(1), password: z.string().min(1) });
 const refreshSchema = z.object({ refresh_token: z.string().min(1) });
 const createPostSchema = z.object({ content: z.string().min(1).max(5000), topic_ids: z.array(z.number()).optional() });
@@ -98,8 +113,17 @@ const createCommentSchema = z.object({ content: z.string().min(1).max(1000), par
 const createReportSchema = z.object({ target_type: z.enum(['post', 'comment', 'user']), target_id: z.number().int().positive(), reason: z.string().min(5).max(1000) });
 
 // ─── Auth ────────────────────────────────────────────────────────
-app.post('/api/v1/auth/register', validate(registerSchema), async (req, res) => {
+app.post('/api/v1/auth/register', registerValidation, async (req, res) => {
   const body = req.body as { username: string; email: string; password: string; date_of_birth?: string };
+
+  // Check duplicate email before creating
+  const existingEmail = await prisma.user.findUnique({ where: { email: body.email } });
+  if (existingEmail) return err(res, 400, 'Email này đã được đăng ký. Vui lòng dùng email khác.');
+
+  // Check duplicate username
+  const existingUsername = await prisma.user.findUnique({ where: { username: body.username } });
+  if (existingUsername) return err(res, 400, 'Username này đã tồn tại. Vui lòng chọn username khác.');
+
   try {
     const user = await prisma.user.create({
       data: { username: body.username, email: body.email, hashedPassword: await hashPassword(body.password), dateOfBirth: body.date_of_birth ? new Date(body.date_of_birth) : null },
@@ -108,8 +132,8 @@ app.post('/api/v1/auth/register', validate(registerSchema), async (req, res) => 
     return created(res, { id: user.id, username: user.username, email: user.email, date_of_birth: user.dateOfBirth, is_admin: user.isAdmin, created_at: user.createdAt });
   } catch (e: unknown) {
     const e2 = e as { code?: string; meta?: { target?: string[] } };
-    if (e2.code === 'P2002') return err(res, 400, `${e2.meta?.target?.[0]?.includes('username') ? 'Username' : 'Email'} already registered`);
-    return err(res, 500, 'Registration failed');
+    if (e2.code === 'P2002') return err(res, 400, 'Username hoặc Email đã tồn tại.');
+    return err(res, 500, 'Đăng ký thất bại. Vui lòng thử lại.');
   }
 });
 
