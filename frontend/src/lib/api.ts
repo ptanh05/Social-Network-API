@@ -32,23 +32,14 @@ api.interceptors.response.use(
             original._retry = true;
             if (!isRefreshing) {
                 isRefreshing = true;
-                const refreshToken = sessionStorage.getItem('refresh_token');
-                if (!refreshToken) {
-                    sessionStorage.removeItem('access_token');
-                    sessionStorage.removeItem('refresh_token');
-                    sessionStorage.removeItem('user');
-                    window.location.href = '/login';
-                    return Promise.reject(error);
-                }
                 try {
                     const res = await axios.post(
                         `${API_BASE_URL}/auth/refresh`,
-                        { refresh_token: refreshToken }
+                        {},
+                        { withCredentials: true }
                     );
-                    const { access_token, refresh_token: newRefresh } =
-                        res.data;
+                    const { access_token } = res.data;
                     sessionStorage.setItem('access_token', access_token);
-                    sessionStorage.setItem('refresh_token', newRefresh);
                     processQueue(null, access_token);
                     isRefreshing = false;
                     original.headers.Authorization = `Bearer ${access_token}`;
@@ -57,7 +48,6 @@ api.interceptors.response.use(
                     processQueue(new Error('refresh failed'), null);
                     isRefreshing = false;
                     sessionStorage.removeItem('access_token');
-                    sessionStorage.removeItem('refresh_token');
                     sessionStorage.removeItem('user');
                     window.location.href = '/login';
                     return Promise.reject(error);

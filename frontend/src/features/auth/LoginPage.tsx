@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { loginSchema } from '../../validators/schemas'
 
@@ -12,6 +12,8 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const { login } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const verified = searchParams.get('verified')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -32,8 +34,9 @@ export default function LoginPage() {
     try {
       await login(username, password)
       navigate('/feed')
-    } catch {
-      setError('Tên đăng nhập hoặc mật khẩu không đúng')
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { detail?: string } } }
+      setError(e.response?.data?.detail || 'Tên đăng nhập hoặc mật khẩu không đúng')
     } finally {
       setLoading(false)
     }
@@ -54,6 +57,16 @@ export default function LoginPage() {
 
         {error && (
           <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm rounded-lg">{error}</div>
+        )}
+        {verified === 'success' && (
+          <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 text-sm rounded-lg">
+            Email đã được xác thực. Bạn có thể đăng nhập.
+          </div>
+        )}
+        {verified === 'invalid' && (
+          <div className="mb-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300 text-sm rounded-lg">
+            Link xác thực không hợp lệ hoặc đã hết hạn.
+          </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">

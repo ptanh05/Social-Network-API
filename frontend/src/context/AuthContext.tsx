@@ -20,31 +20,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Restore session on app load
   useEffect(() => {
-    const token = sessionStorage.getItem('access_token')
     const savedUser = sessionStorage.getItem('user')
-    if (token && savedUser) {
-      setAccessToken(token)
-      setUser(JSON.parse(savedUser))
-      // Verify token still valid
-      authApi.getMe()
-        .then(setUser)
-        .catch(() => {
-          sessionStorage.removeItem('access_token')
-          sessionStorage.removeItem('refresh_token')
-          sessionStorage.removeItem('user')
-          setAccessToken(null)
-          setUser(null)
-        })
-        .finally(() => setIsLoading(false))
-    } else {
-      setIsLoading(false)
+    const bootstrap = async () => {
+      const token = sessionStorage.getItem('access_token')
+      if (token) {
+        setAccessToken(token)
+      }
+      if (savedUser) {
+        setUser(JSON.parse(savedUser))
+      }
+
+      try {
+        const refreshed = await authApi.refresh()
+        sessionStorage.setItem('access_token', refreshed.access_token)
+        setAccessToken(refreshed.access_token)
+        const me = await authApi.getMe()
+        setUser(me)
+        sessionStorage.setItem('user', JSON.stringify(me))
+      } catch {
+        sessionStorage.removeItem('access_token')
+        sessionStorage.removeItem('user')
+        setAccessToken(null)
+        setUser(null)
+      } finally {
+        setIsLoading(false)
+      }
     }
+
+    bootstrap()
   }, [])
 
   const login = async (username: string, password: string) => {
     const res = await authApi.login(username, password)
     sessionStorage.setItem('access_token', res.access_token)
-    sessionStorage.setItem('refresh_token', res.refresh_token)
     setAccessToken(res.access_token)
 
     const me = await authApi.getMe()
@@ -53,8 +61,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const logout = () => {
+    void authApi.logout()
     sessionStorage.removeItem('access_token')
-    sessionStorage.removeItem('refresh_token')
     sessionStorage.removeItem('user')
     setAccessToken(null)
     setUser(null)
@@ -63,8 +71,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = async (data: { username: string; email: string; password: string; date_of_birth?: string }) => {
     await authApi.register(data)
-    // Auto-login after register
-    await login(data.username, data.password)
   }
 
   return (

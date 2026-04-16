@@ -1,9 +1,11 @@
 import 'dotenv/config';
 import express from 'express';
+import crypto from 'crypto';
 import { prisma, AuthUser, AuthRequest } from './types/index.js';
 import { hashPassword, verifyPassword } from './lib/bcrypt.js';
 import { signAccessToken, signRefreshToken, verifyToken } from './lib/jwt.js';
 import { ok, created, err, noContent } from './lib/utils.js';
+import { sendVerificationEmail } from './lib/mail.js';
 import { z } from 'zod';
 
 const ALLOWED_ORIGINS = [
@@ -22,6 +24,9 @@ const ALLOWED_ORIGINS = [
 ];
 
 const app = express();
+const REFRESH_COOKIE_NAME = 'refresh_token';
+const FRONTEND_BASE_URL = process.env.FRONTEND_BASE_URL || 'http://localhost:5173';
+const API_PUBLIC_BASE_URL = process.env.API_PUBLIC_BASE_URL || 'http://localhost:3001/api/v1';
 
 // Manual CORS — no external package, more reliable on Vercel
 app.use((req, res, next) => {
@@ -88,6 +93,55 @@ function validate(schema: z.ZodSchema) {
   };
 }
 
+function hashRawToken(token: string): string {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+function parseCookies(cookieHeader?: string): Record<string, string> {
+  if (!cookieHeader) return {};
+  return cookieHeader.split(';').reduce<Record<string, string>>((acc, part) => {
+    const [name, ...rest] = part.trim().split('=');
+    if (!name || rest.length === 0) return acc;
+    acc[name] = decodeURIComponent(rest.join('='));
+    return acc;
+  }, {});
+}
+
+function setRefreshCookie(res: express.Response, refreshToken: string): void {
+  const secure = process.env.NODE_ENV === 'production';
+  res.cookie(REFRESH_COOKIE_NAME, refreshToken, {
+    httpOnly: true,
+    secure,
+    sameSite: secure ? 'none' : 'lax',
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+    path: '/',
+  });
+}
+
+function clearRefreshCookie(res: express.Response): void {
+  const secure = process.env.NODE_ENV === 'production';
+  res.clearCookie(REFRESH_COOKIE_NAME, {
+    httpOnly: true,
+    secure,
+    sameSite: secure ? 'none' : 'lax',
+    path: '/',
+  });
+}
+
+async function issueAuthTokens(res: express.Response, userId: number): Promise<{ access_token: string; expires_in: number }> {
+  const access_token = signAccessToken(userId);
+  const refresh_token = signRefreshToken(userId);
+  await prisma.refreshToken.create({
+    data: {
+      userId,
+      tokenHash: await hashPassword(refresh_token),
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    },
+  });
+  setRefreshCookie(res, refresh_token);
+  return { access_token, expires_in: 600 };
+}
+
 // ─── Schemas ──────────────────────────────────────────────────────
 const registerSchema = z.object({
   username: z.string().regex(/^[a-zA-Z0-9_]{4,20}$/, 'Username từ 4-20 ký tự, chỉ gồm chữ cái, số và dấu gạch dưới').min(4, 'Username từ 4-20 ký tự').max(20),
@@ -106,7 +160,7 @@ const registerValidation = (req: express.Request, res: express.Response, next: e
 };
 
 const loginSchema = z.object({ username: z.string().min(1), password: z.string().min(1) });
-const refreshSchema = z.object({ refresh_token: z.string().min(1) });
+const refreshSchema = z.object({ refresh_token: z.string().min(1).optional() });
 const createPostSchema = z.object({ content: z.string().min(1).max(5000), topic_ids: z.array(z.number()).optional() });
 const updatePostSchema = z.object({ content: z.string().min(1).max(5000).optional(), topic_ids: z.array(z.number()).optional() });
 const createCommentSchema = z.object({ content: z.string().min(1).max(1000), parent_id: z.number().optional() });
@@ -125,11 +179,30 @@ app.post('/api/v1/auth/register', registerValidation, async (req, res) => {
   if (existingUsername) return err(res, 400, 'Username này đã tồn tại. Vui lòng chọn username khác.');
 
   try {
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const verificationTokenHash = hashRawToken(verificationToken);
     const user = await prisma.user.create({
-      data: { username: body.username, email: body.email, hashedPassword: await hashPassword(body.password), dateOfBirth: body.date_of_birth ? new Date(body.date_of_birth) : null },
+      data: {
+        username: body.username,
+        email: body.email,
+        hashedPassword: await hashPassword(body.password),
+        dateOfBirth: body.date_of_birth ? new Date(body.date_of_birth) : null,
+        emailVerificationTokenHash: verificationTokenHash,
+        emailVerificationExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      },
       select: { id: true, username: true, email: true, dateOfBirth: true, isAdmin: true, createdAt: true },
     });
-    return created(res, { id: user.id, username: user.username, email: user.email, date_of_birth: user.dateOfBirth, is_admin: user.isAdmin, created_at: user.createdAt });
+    const verifyUrl = `${API_PUBLIC_BASE_URL}/auth/verify-email?token=${verificationToken}`;
+    await sendVerificationEmail(user.email, user.username, verifyUrl);
+    return created(res, {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      date_of_birth: user.dateOfBirth,
+      is_admin: user.isAdmin,
+      created_at: user.createdAt,
+      detail: 'Đăng ký thành công. Vui lòng kiểm tra email để xác thực tài khoản.',
+    });
   } catch (e: unknown) {
     const e2 = e as { code?: string; meta?: { target?: string[] } };
     if (e2.code === 'P2002') return err(res, 400, 'Username hoặc Email đã tồn tại.');
@@ -137,35 +210,98 @@ app.post('/api/v1/auth/register', registerValidation, async (req, res) => {
   }
 });
 
+app.get('/api/v1/auth/verify-email', async (req, res) => {
+  const token = typeof req.query.token === 'string' ? req.query.token : '';
+  if (!token) return res.redirect(`${FRONTEND_BASE_URL}/login?verified=missing`);
+
+  const tokenHash = hashRawToken(token);
+  const user = await prisma.user.findFirst({
+    where: {
+      emailVerificationTokenHash: tokenHash,
+      emailVerificationExpiresAt: { gt: new Date() },
+    },
+    select: { id: true },
+  });
+
+  if (!user) return res.redirect(`${FRONTEND_BASE_URL}/login?verified=invalid`);
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      isEmailVerified: true,
+      emailVerificationTokenHash: null,
+      emailVerificationExpiresAt: null,
+    },
+  });
+  return res.redirect(`${FRONTEND_BASE_URL}/login?verified=success`);
+});
+
 app.post('/api/v1/auth/login', validate(loginSchema), async (req, res) => {
   const body = req.body as { username: string; password: string };
   const user = await prisma.user.findUnique({ where: { username: body.username } });
   if (!user) return err(res, 401, 'Incorrect username or password');
   if (!await verifyPassword(body.password, user.hashedPassword)) return err(res, 401, 'Incorrect username or password');
-  const access_token = signAccessToken(user.id);
-  const refresh_token = signRefreshToken(user.id);
-  await prisma.refreshToken.create({ data: { userId: user.id, tokenHash: await hashPassword(refresh_token), expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) } });
-  return ok(res, { access_token, refresh_token, token_type: 'bearer', expires_in: 600 });
+  if (!user.isEmailVerified) return err(res, 403, 'Vui lòng xác thực email trước khi đăng nhập');
+  await prisma.refreshToken.deleteMany({ where: { userId: user.id } });
+  const { access_token, expires_in } = await issueAuthTokens(res, user.id);
+  return ok(res, { access_token, token_type: 'bearer', expires_in });
 });
 
 app.post('/api/v1/auth/refresh', validate(refreshSchema), async (req, res) => {
-  const { refresh_token } = req.body as { refresh_token: string };
+  const bodyToken = (req.body as { refresh_token?: string }).refresh_token;
+  const cookieToken = parseCookies(req.headers.cookie)[REFRESH_COOKIE_NAME];
+  const refresh_token = bodyToken || cookieToken || '';
+  if (!refresh_token) {
+    clearRefreshCookie(res);
+    return err(res, 401, 'Invalid refresh token');
+  }
+
   const payload = verifyToken(refresh_token);
-  if (!payload || payload.type !== 'refresh') return err(res, 401, 'Invalid refresh token');
+  if (!payload || payload.type !== 'refresh') {
+    clearRefreshCookie(res);
+    return err(res, 401, 'Invalid refresh token');
+  }
+
   const user = await prisma.user.findUnique({ where: { id: Number(payload.sub) } });
   if (!user) return err(res, 401, 'User not found');
-  const newAccessToken = signAccessToken(user.id);
-  const newRefreshToken = signRefreshToken(user.id);
-  await prisma.refreshToken.create({ data: { userId: user.id, tokenHash: await hashPassword(newRefreshToken), expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) } });
-  return ok(res, { access_token: newAccessToken, refresh_token: newRefreshToken, token_type: 'bearer', expires_in: 600 });
+  if (!user.isEmailVerified) {
+    clearRefreshCookie(res);
+    return err(res, 403, 'Vui lòng xác thực email trước khi đăng nhập');
+  }
+
+  const tokenRows = await prisma.refreshToken.findMany({ where: { userId: user.id } });
+  let valid = false;
+  for (const tokenRow of tokenRows) {
+    if (await verifyPassword(refresh_token, tokenRow.tokenHash)) {
+      valid = true;
+      break;
+    }
+  }
+  if (!valid) {
+    clearRefreshCookie(res);
+    return err(res, 401, 'Invalid refresh token');
+  }
+
+  await prisma.refreshToken.deleteMany({ where: { userId: user.id } });
+  const { access_token, expires_in } = await issueAuthTokens(res, user.id);
+  return ok(res, { access_token, token_type: 'bearer', expires_in });
 });
 
 app.post('/api/v1/auth/logout', async (req, res) => {
+  const cookieToken = parseCookies(req.headers.cookie)[REFRESH_COOKIE_NAME];
+  if (cookieToken) {
+    const cookiePayload = verifyToken(cookieToken);
+    if (cookiePayload && cookiePayload.type === 'refresh') {
+      await prisma.refreshToken.deleteMany({ where: { userId: Number(cookiePayload.sub) } });
+    }
+  }
+
   const auth = req.headers.authorization;
   if (auth?.startsWith('Bearer ')) {
     const payload = verifyToken(auth.slice(7));
     if (payload && payload.type === 'access') await prisma.refreshToken.deleteMany({ where: { userId: Number(payload.sub) } });
   }
+  clearRefreshCookie(res);
   return ok(res, { success: true });
 });
 

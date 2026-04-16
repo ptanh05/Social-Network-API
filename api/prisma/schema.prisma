@@ -11,6 +11,9 @@ model User {
   username        String    @unique @db.VarChar(50)
   email           String    @unique @db.VarChar(255)
   hashedPassword   String    @map("hashed_password") @db.VarChar(255)
+  isEmailVerified Boolean   @default(false) @map("is_email_verified")
+  emailVerificationTokenHash String? @map("email_verification_token_hash") @db.VarChar(255)
+  emailVerificationExpiresAt DateTime? @map("email_verification_expires_at") @db.Timestamptz
   dateOfBirth     DateTime? @map("date_of_birth") @db.Date
   avatarUrl       String    @default("") @map("avatar_url") @db.Text
   isAdmin         Boolean   @default(false) @map("is_admin")
