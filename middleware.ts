@@ -6,9 +6,9 @@ const ALLOWED_ORIGINS = [
   'https://frontend-delta-bice-22.vercel.app',
   'https://frontend-jds2yl23u-ptanh05s-projects.vercel.app',
   'https://frontend-2pmqjxpmt-ptanh05s-projects.vercel.app',
-  'https://social-network-mzdhoa71p-ptanh05s-projects.vercel.app',
   'https://social-network-aplqf0k.onrender.com',
   'https://api-roan-rho-71.vercel.app',
+  'https://social-network-g68stlz7u-ptanh05s-projects.vercel.app',
 ];
 
 export const config = {

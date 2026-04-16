@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../../context/AuthContext'
 import { useTheme } from '../../context/ThemeContext'
 import { usersApi } from '../../services/users'
@@ -51,10 +52,10 @@ export default function Navbar() {
   }
 
   return (
-    <header className="sticky top-0 z-50 bg-white dark:bg-dark-card border-b border-gray-200 dark:border-dark-border transition-colors">
+    <header className="sticky top-0 z-50 bg-white dark:bg-dark-card border-b border-gray-200 dark:border-dark-border transition-colors shadow-sm">
       <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between gap-3">
         {/* Logo */}
-        <Link to="/feed" className="text-xl font-bold text-blue-500 shrink-0">
+        <Link to="/feed" className="text-xl font-bold text-blue-500 shrink-0 hover:text-blue-600 transition-colors">
           🌐 SocialNet
         </Link>
 
@@ -68,123 +69,132 @@ export default function Navbar() {
             placeholder="Tìm kiếm người dùng..."
             className="w-full bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-dark-border rounded-full px-4 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all text-gray-900 dark:text-dark-text placeholder:text-gray-400"
           />
-          {showDropdown && results.length > 0 && (
-            <div className="absolute top-full mt-1 left-0 right-0 bg-white dark:bg-dark-card border border-gray-200 dark:border-dark-border rounded-xl shadow-lg overflow-hidden z-50">
-              {results.map(u => (
-                <button
-                  key={u.id}
-                  onClick={() => handleResultClick(u.id)}
-                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-dark-bg transition-colors text-left"
-                >
-                  <Avatar username={u.username} size="sm" />
-                  <div className="min-w-0">
-                    <div className="font-medium text-gray-900 dark:text-dark-text text-sm truncate">{u.username}</div>
-                    <div className="text-xs text-gray-400 truncate">{u.email}</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
+          <AnimatePresence>
+            {showDropdown && results.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: -4, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                className="absolute top-full mt-1 left-0 right-0 bg-white dark:bg-dark-card border border-gray-200 dark:border-dark-border rounded-xl shadow-lg overflow-hidden z-50"
+              >
+                {results.map(u => (
+                  <button
+                    key={u.id}
+                    onClick={() => handleResultClick(u.id)}
+                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-dark-bg transition-colors text-left"
+                  >
+                    <Avatar username={u.username} size="sm" />
+                    <div className="min-w-0">
+                      <div className="font-medium text-gray-900 dark:text-dark-text text-sm truncate">{u.username}</div>
+                      <div className="text-xs text-gray-400 truncate">{u.email}</div>
+                    </div>
+                  </button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* Desktop nav links */}
         <nav className="hidden md:flex items-center gap-1 shrink-0">
-          <Link to="/feed" className="px-3 py-2 rounded-lg text-gray-600 dark:text-dark-muted hover:bg-gray-100 dark:hover:bg-dark-bg text-sm font-medium transition-colors">
-            📰
-          </Link>
-          <Link to="/explore" className="px-3 py-2 rounded-lg text-gray-600 dark:text-dark-muted hover:bg-gray-100 dark:hover:bg-dark-bg text-sm font-medium transition-colors">
-            🔍
-          </Link>
-          <Link to="/settings" className="px-3 py-2 rounded-lg text-gray-600 dark:text-dark-muted hover:bg-gray-100 dark:hover:bg-dark-bg text-sm font-medium transition-colors">
-            ⚙️
-          </Link>
+          <Link to="/feed" className="px-3 py-2 rounded-lg text-gray-600 dark:text-dark-muted hover:bg-gray-100 dark:hover:bg-dark-bg text-sm font-medium transition-colors">📰</Link>
+          <Link to="/explore" className="px-3 py-2 rounded-lg text-gray-600 dark:text-dark-muted hover:bg-gray-100 dark:hover:bg-dark-bg text-sm font-medium transition-colors">🔍</Link>
+          <Link to="/settings" className="px-3 py-2 rounded-lg text-gray-600 dark:text-dark-muted hover:bg-gray-100 dark:hover:bg-dark-bg text-sm font-medium transition-colors">⚙️</Link>
           {user?.is_admin && (
-            <Link to="/admin" className="px-3 py-2 rounded-lg text-gray-600 dark:text-dark-muted hover:bg-gray-100 dark:hover:bg-dark-bg text-sm font-medium transition-colors" title="Quản trị">
-              🛡️
-            </Link>
+            <Link to="/admin" className="px-3 py-2 rounded-lg text-gray-600 dark:text-dark-muted hover:bg-gray-100 dark:hover:bg-dark-bg text-sm font-medium transition-colors" title="Quản trị">🛡️</Link>
           )}
         </nav>
 
         {/* Right actions */}
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1 shrink-0">
           {/* Dark mode toggle */}
-          <button
+          <motion.button
             onClick={toggleTheme}
+            whileTap={{ rotate: 90, scale: 0.9 }}
             className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-dark-bg transition-colors"
             title={theme === 'dark' ? 'Chuyển sang chế độ sáng' : 'Chuyển sang chế độ tối'}
           >
             {theme === 'dark' ? '☀️' : '🌙'}
-          </button>
+          </motion.button>
 
           {/* Notifications bell */}
-          {user && (
-            <NotificationBell />
-          )}
+          {user && <NotificationBell />}
 
           {/* User avatar + name */}
           {user && (
             <div className="hidden sm:flex items-center gap-2">
-              <Link to={`/profile/${user.id}`}>
-                <Avatar username={user.username} size="sm" />
-              </Link>
+              <Link to={`/profile/${user.id}`}><Avatar username={user.username} size="sm" /></Link>
               <span className="text-sm text-gray-700 dark:text-dark-text font-medium">{user.username}</span>
             </div>
           )}
 
-          <button
+          <motion.button
+            whileTap={{ scale: 0.9 }}
             onClick={logout}
             className="text-sm text-gray-500 hover:text-red-500 transition-colors hidden sm:block"
           >
             🚪
-          </button>
+          </motion.button>
 
           {/* Mobile menu button */}
-          <button
-            onClick={() => setShowMobileMenu(!showMobileMenu)}
+          <motion.button
+            whileTap={{ scale: 0.9 }}
+            onClick={() => setShowMobileMenu(v => !v)}
             className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-dark-bg md:hidden"
           >
             {showMobileMenu ? '✕' : '☰'}
-          </button>
+          </motion.button>
         </div>
       </div>
 
       {/* Mobile menu */}
-      {showMobileMenu && (
-        <div className="md:hidden border-t border-gray-200 dark:border-dark-border bg-white dark:bg-dark-card px-4 py-3 space-y-1">
-          {/* Mobile search */}
-          <div className="relative mb-3">
-            <input
-              type="text"
-              value={query}
-              onChange={e => handleSearch(e.target.value)}
-              placeholder="Tìm kiếm người dùng..."
-              className="w-full bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-dark-border rounded-full px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 dark:text-dark-text"
-            />
-          </div>
-          <Link to="/feed" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-gray-700 dark:text-dark-text hover:bg-gray-100 dark:hover:bg-dark-bg text-sm font-medium">
-            📰 Bảng tin
-          </Link>
-          <Link to="/explore" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-gray-700 dark:text-dark-text hover:bg-gray-100 dark:hover:bg-dark-bg text-sm font-medium">
-            🔍 Khám phá
-          </Link>
-          {user && (
-            <Link to={`/profile/${user.id}`} onClick={() => setShowMobileMenu(false)} className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-gray-700 dark:text-dark-text hover:bg-gray-100 dark:hover:bg-dark-bg text-sm font-medium">
-              👤 Trang cá nhân
-            </Link>
-          )}
-          <Link to="/settings" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-gray-700 dark:text-dark-text hover:bg-gray-100 dark:hover:bg-dark-bg text-sm font-medium">
-            ⚙️ Cài đặt
-          </Link>
-          {user?.is_admin && (
-            <Link to="/admin" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-gray-700 dark:text-dark-text hover:bg-gray-100 dark:hover:bg-dark-bg text-sm font-medium">
-              🛡️ Quản trị
-            </Link>
-          )}
-          <button onClick={logout} className="flex items-center gap-3 w-full px-4 py-2.5 rounded-lg text-red-500 hover:bg-red-50 text-sm font-medium">
-            🚪 Đăng xuất
-          </button>
-        </div>
-      )}
+      <AnimatePresence>
+        {showMobileMenu && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+            className="md:hidden overflow-hidden border-t border-gray-200 dark:border-dark-border bg-white dark:bg-dark-card"
+          >
+            <div className="px-4 py-3 space-y-1">
+              {/* Mobile search */}
+              <div className="relative mb-3">
+                <input
+                  type="text"
+                  value={query}
+                  onChange={e => handleSearch(e.target.value)}
+                  placeholder="Tìm kiếm người dùng..."
+                  className="w-full bg-gray-50 dark:bg-dark-bg border border-gray-200 dark:border-dark-border rounded-full px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 dark:text-dark-text"
+                />
+              </div>
+              <Link to="/feed" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-gray-700 dark:text-dark-text hover:bg-gray-100 dark:hover:bg-dark-bg text-sm font-medium">
+                📰 Bảng tin
+              </Link>
+              <Link to="/explore" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-gray-700 dark:text-dark-text hover:bg-gray-100 dark:hover:bg-dark-bg text-sm font-medium">
+                🔍 Khám phá
+              </Link>
+              {user && (
+                <Link to={`/profile/${user.id}`} onClick={() => setShowMobileMenu(false)} className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-gray-700 dark:text-dark-text hover:bg-gray-100 dark:hover:bg-dark-bg text-sm font-medium">
+                  👤 Trang cá nhân
+                </Link>
+              )}
+              <Link to="/settings" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-gray-700 dark:text-dark-text hover:bg-gray-100 dark:hover:bg-dark-bg text-sm font-medium">
+                ⚙️ Cài đặt
+              </Link>
+              {user?.is_admin && (
+                <Link to="/admin" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-gray-700 dark:text-dark-text hover:bg-gray-100 dark:hover:bg-dark-bg text-sm font-medium">
+                  🛡️ Quản trị
+                </Link>
+              )}
+              <button onClick={logout} className="flex items-center gap-3 w-full px-4 py-2.5 rounded-lg text-red-500 hover:bg-red-50 text-sm font-medium">
+                🚪 Đăng xuất
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </header>
   )
 }
