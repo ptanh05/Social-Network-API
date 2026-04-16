@@ -46,3 +46,5 @@ Thumbs.db
 
 # Node (nếu dùng thêm frontend)
 node_modules/
+.vercel
+.env*.local
