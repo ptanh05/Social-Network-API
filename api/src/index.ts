@@ -9,9 +9,14 @@ import { z } from 'zod';
 const ALLOWED_ORIGINS = [
   'http://localhost:5173',
   'http://localhost:5174',
+  'https://frontend-delta-bice-22.vercel.app',
+  'https://frontend-jds2yl23u-ptanh05s-projects.vercel.app',
+  'https://frontend-2pmqjxpmt-ptanh05s-projects.vercel.app',
+  'https://social-network-mzdhoa71p-ptanh05s-projects.vercel.app',
   'https://social-network-5emiiq1c9-ptanh05s-projects.vercel.app',
   'https://social-network-api-seven.vercel.app',
   'https://social-network-aplqf0k.onrender.com',
+  'https://api-roan-rho-71.vercel.app',
 ];
 
 const app = express();
@@ -21,12 +26,11 @@ app.use((req, res, next) => {
   const origin = req.headers.origin ?? '';
   res.setHeader('Vary', 'Origin');
   if (!ALLOWED_ORIGINS.includes(origin)) {
-    // Reject instead of silently falling back to localhost
     return next();
   }
   res.setHeader('Access-Control-Allow-Origin', origin);
   res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,PATCH,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
@@ -331,7 +335,10 @@ app.post('/api/v1/posts/:id/comments', validate(createCommentSchema), withAuth(a
   if (!post) return err(res, 404, 'Post not found');
   const comment = await prisma.comment.create({ data: { content, postId, authorId: u.id, parentId: parent_id || null }, include: { author: { select: { id: true, username: true, email: true, createdAt: true } } } });
   await prisma.post.update({ where: { id: postId }, data: { commentsCount: { increment: 1 } } });
-  if (post.authorId !== u.id) await prisma.notification.create({ data: { userId: post.authorId, type: 'comment', data: { actor_id: u.id, actor_username: u.username, post_id: postId }, actorAvatarUrl: u.avatar_url || null } });
+  if (post.authorId !== u.id) {
+    const notif = await prisma.notification.create({ data: { userId: post.authorId, type: 'comment', data: { actor_id: u.id, actor_username: u.username, post_id: postId }, actorAvatarUrl: u.avatar_url || null } });
+    broadcastNotification(post.authorId, { ...notif, actor_avatar_url: u.avatar_url });
+  }
   return created(res, { id: comment.id, content: comment.content, post_id: comment.postId, author_id: comment.authorId, parent_id: comment.parentId, created_at: comment.createdAt, author: { id: comment.author.id, username: comment.author.username, email: comment.author.email, created_at: comment.author.createdAt } });
 }));
 
@@ -351,7 +358,10 @@ app.post('/api/v1/likes/posts/:id/like', withAuth(async (req: AuthRequest, res) 
   try {
     await prisma.like.create({ data: { userId: u.id, postId } });
     await prisma.post.update({ where: { id: postId }, data: { likesCount: { increment: 1 } } });
-    if (post.authorId !== u.id) await prisma.notification.create({ data: { userId: post.authorId, type: 'like', data: { actor_id: u.id, actor_username: u.username, post_id: postId }, actorAvatarUrl: u.avatar_url || null } });
+    if (post.authorId !== u.id) {
+      const notif = await prisma.notification.create({ data: { userId: post.authorId, type: 'like', data: { actor_id: u.id, actor_username: u.username, post_id: postId }, actorAvatarUrl: u.avatar_url || null } });
+      broadcastNotification(post.authorId, { ...notif, actor_avatar_url: u.avatar_url });
+    }
     return created(res, { liked: true });
   } catch (e: unknown) {
     if ((e as { code?: string }).code === 'P2002') return err(res, 400, 'Already liked');
@@ -413,7 +423,8 @@ app.post('/api/v1/follows/users/:id/follow', withAuth(async (req: AuthRequest, r
   if (!target) return err(res, 404, 'User not found');
   try {
     await prisma.follow.create({ data: { followerId: me.id, followingId: targetId } });
-    await prisma.notification.create({ data: { userId: targetId, type: 'follow', data: { actor_id: me.id, actor_username: me.username }, actorAvatarUrl: me.avatar_url || null } });
+    const notif = await prisma.notification.create({ data: { userId: targetId, type: 'follow', data: { actor_id: me.id, actor_username: me.username }, actorAvatarUrl: me.avatar_url || null } });
+    broadcastNotification(targetId, { ...notif, actor_avatar_url: me.avatar_url });
     return created(res, { following: true });
   } catch (e: unknown) {
     if ((e as { code?: string }).code === 'P2002') return err(res, 400, 'Already following');
@@ -481,6 +492,89 @@ app.put('/api/v1/notifications/read-all', withAuth(async (req: AuthRequest, res)
   await prisma.notification.updateMany({ where: { userId: u.id }, data: { isRead: true } });
   return noContent(res);
 }));
+
+// ─── Notifications Stream (SSE) ─────────────────────────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const notificationStreams = new Map<number, Set<(eventName: string, data: any) => void>>();
+
+export function broadcastNotification(userId: number, notification: unknown) {
+  const handlers = notificationStreams.get(userId);
+  if (handlers) {
+    for (const sendEvent of handlers) {
+      try {
+        sendEvent('notification', { notification });
+      } catch {
+        // Client disconnected — will be cleaned up by req 'close' event
+      }
+    }
+  }
+}
+
+app.get('/api/v1/notifications/stream', async (req: express.Request, res: express.Response) => {
+  // EventSource cannot send custom Authorization headers — accept token via query param
+  const rawToken = (req.headers.authorization ?? '').startsWith('Bearer ')
+    ? req.headers.authorization.slice(7)
+    : (typeof req.query.access_token === 'string' ? req.query.access_token : '');
+
+  if (!rawToken) {
+    res.status(401).json({ detail: 'Missing token' });
+    return;
+  }
+
+  const payload = verifyToken(rawToken);
+  if (!payload || payload.type !== 'access') {
+    res.status(401).json({ detail: 'Invalid or expired token' });
+    return;
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: Number(payload.sub) },
+    select: { id: true, username: true, email: true, isAdmin: true, avatarUrl: true },
+  });
+  if (!user) {
+    res.status(401).json({ detail: 'User not found' });
+    return;
+  }
+
+  const authUser: AuthUser = {
+    id: user.id, username: user.username, email: user.email,
+    is_admin: user.isAdmin, avatar_url: user.avatarUrl,
+  };
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+
+  const sendEvent = (eventName: string, data: unknown) => {
+    res.write(`event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+
+  if (!notificationStreams.has(authUser.id)) {
+    notificationStreams.set(authUser.id, new Set());
+  }
+  notificationStreams.get(authUser.id)!.add(sendEvent);
+
+  sendEvent('connected', { userId: authUser.id });
+
+  // Keep connection alive with periodic heartbeat
+  const heartbeat = setInterval(() => {
+    if (res.writableEnded) {
+      clearInterval(heartbeat);
+      return;
+    }
+    res.write(': heartbeat\n\n');
+  }, 25000);
+
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    notificationStreams.get(authUser.id)?.delete(sendEvent);
+    if (notificationStreams.get(authUser.id)?.size === 0) {
+      notificationStreams.delete(authUser.id);
+    }
+  });
+});
 
 // ─── Bookmarks ───────────────────────────────────────────────────
 app.get('/api/v1/bookmarks', withAuth(async (req: AuthRequest, res) => {

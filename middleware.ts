@@ -1,36 +1,39 @@
 const ALLOWED_ORIGINS = [
   'http://localhost:5173',
   'http://localhost:5174',
-  'https://social-network-api-seven.vercel.app',
+  'https://social-network-mzdhoa71p-ptanh05s-projects.vercel.app',
+  'https://social-network-5emiiq1c9-ptanh05s-projects.vercel.app',
+  'https://frontend-delta-bice-22.vercel.app',
+  'https://frontend-jds2yl23u-ptanh05s-projects.vercel.app',
+  'https://frontend-2pmqjxpmt-ptanh05s-projects.vercel.app',
+  'https://social-network-mzdhoa71p-ptanh05s-projects.vercel.app',
   'https://social-network-aplqf0k.onrender.com',
+  'https://api-roan-rho-71.vercel.app',
 ];
 
 export const config = {
-  matcher: '/api/:path*',
+  matcher: ['/api/:path*'],
 };
 
 export function middleware(request: Request) {
   const origin = request.headers.get('origin') ?? '';
 
-  const allowedOrigin = ALLOWED_ORIGINS.includes(origin)
-    ? origin
-    : ALLOWED_ORIGINS[2]; // fallback to production
+  if (!ALLOWED_ORIGINS.includes(origin)) {
+    return;
+  }
 
   const headers: Record<string, string> = {
-    'Access-Control-Allow-Origin': allowedOrigin,
-    'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
+    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,PATCH,OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type,Authorization',
     'Access-Control-Allow-Credentials': 'true',
     'Access-Control-Max-Age': '86400',
+    'Vary': 'Origin',
   };
 
-  // Handle preflight OPTIONS
   if (request.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers });
   }
 
-  // Add CORS headers to normal responses
-  const response = new Response(null, { status: 200 });
-  Object.entries(headers).forEach(([k, v]) => response.headers.set(k, v));
-  return response;
+  return;
 }
