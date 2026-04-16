@@ -1,12 +1,137 @@
-import 'dotenv/config';
 import express from 'express';
 import crypto from 'crypto';
-import { prisma, AuthUser, AuthRequest } from './types/index.js';
-import { hashPassword, verifyPassword } from './lib/bcrypt.js';
-import { signAccessToken, signRefreshToken, verifyToken } from './lib/jwt.js';
-import { ok, created, err, noContent } from './lib/utils.js';
-import { sendVerificationEmail } from './lib/mail.js';
+import { Pool } from 'pg';
+import { PrismaPg } from '@prisma/adapter-pg';
+import prismaClientPkg from '@prisma/client';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import nodemailer from 'nodemailer';
 import { z } from 'zod';
+
+const { PrismaClient } = prismaClientPkg;
+const SALT_ROUNDS = 10;
+const SECRET = process.env.SECRET_KEY || 'fallback-secret';
+const ALGORITHM = process.env.ALGORITHM || 'HS256';
+const EXPIRE_MINUTES = parseInt(process.env.ACCESS_TOKEN_EXPIRE_MINUTES || '10', 10);
+
+interface TokenPayload {
+  sub: number;
+  type: 'access' | 'refresh';
+  iat?: number;
+  exp?: number;
+}
+
+interface AuthUser {
+  id: number;
+  username: string;
+  email: string;
+  is_admin: boolean;
+  avatar_url: string;
+}
+
+type AuthRequest = express.Request & { user?: AuthUser };
+
+function createPrismaClient() {
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) throw new Error('DATABASE_URL is not set');
+  const pool = new Pool({ connectionString });
+  const adapter = new PrismaPg(pool);
+  return new PrismaClient({ adapter });
+}
+
+const globalForPrisma = globalThis as typeof globalThis & { prisma?: InstanceType<typeof PrismaClient> };
+const prisma: InstanceType<typeof PrismaClient> = globalForPrisma.prisma ?? createPrismaClient();
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+
+async function hashPassword(password: string): Promise<string> {
+  return bcrypt.hash(password, SALT_ROUNDS);
+}
+
+async function verifyPassword(password: string, hashed: string): Promise<boolean> {
+  return bcrypt.compare(password, hashed);
+}
+
+function signAccessToken(userId: number): string {
+  return jwt.sign({ sub: userId, type: 'access' }, SECRET, {
+    algorithm: ALGORITHM as jwt.Algorithm,
+    expiresIn: `${EXPIRE_MINUTES}m`,
+  });
+}
+
+function signRefreshToken(userId: number): string {
+  return jwt.sign({ sub: userId, type: 'refresh' }, SECRET, {
+    algorithm: ALGORITHM as jwt.Algorithm,
+    expiresIn: '7d',
+  });
+}
+
+function verifyToken(token: string): TokenPayload | null {
+  try {
+    return jwt.verify(token, SECRET, { algorithms: [ALGORITHM as jwt.Algorithm] }) as unknown as TokenPayload;
+  } catch {
+    return null;
+  }
+}
+
+function ok(res: express.Response, data: unknown): void {
+  res.json(data);
+}
+
+function created(res: express.Response, data: unknown): void {
+  res.status(201).json(data);
+}
+
+function noContent(res: express.Response): void {
+  res.sendStatus(204);
+}
+
+function err(res: express.Response, status: number, msg: string): void {
+  res.status(status).json({ detail: msg });
+}
+
+function buildTransporter() {
+  const host = process.env.SMTP_HOST;
+  const port = parseInt(process.env.SMTP_PORT || '587', 10);
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+
+  if (!host || !user || !pass) return null;
+
+  return nodemailer.createTransport({
+    host,
+    port,
+    secure: port === 465,
+    auth: { user, pass },
+  });
+}
+
+async function sendVerificationEmail(to: string, username: string, verifyUrl: string): Promise<void> {
+  const transporter = buildTransporter();
+  if (!transporter) throw new Error('SMTP is not configured');
+
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER || 'no-reply@socialnet.local';
+  await transporter.sendMail({
+    from,
+    to,
+    subject: 'Xac thuc tai khoan SocialNet',
+    text: `Xin chao ${username},\n\nVui long bam vao link sau de xac thuc tai khoan:\n${verifyUrl}\n\nLink co hieu luc trong 24 gio.`,
+    html: `
+      <div style="font-family:Arial,sans-serif;line-height:1.6">
+        <h2>Xin chao ${username},</h2>
+        <p>Cam on ban da dang ky SocialNet.</p>
+        <p>Vui long bam vao nut ben duoi de xac thuc email:</p>
+        <p>
+          <a href="${verifyUrl}" style="display:inline-block;padding:10px 16px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;">
+            Xac thuc tai khoan
+          </a>
+        </p>
+        <p>Hoac copy link sau vao trinh duyet:</p>
+        <p>${verifyUrl}</p>
+        <p>Link co hieu luc trong 24 gio.</p>
+      </div>
+    `,
+  });
+}
 
 const ALLOWED_ORIGINS = [
   'http://localhost:5173',
