@@ -149,10 +149,18 @@ const ALLOWED_ORIGINS = [
   'https://social-network-xdydrfgcu-ptanh05s-projects.vercel.app',
   'https://social-network-7uvvrrubn-ptanh05s-projects.vercel.app',
   'https://social-net-eight.vercel.app',
+  'https://social-a4fmhtlgd-ptanh05s-projects.vercel.app',
   // Render backend + other domains
   'https://social-network-api-f1kb.onrender.com',
   'https://api-roan-rho-71.vercel.app',
   'https://social-network-aplqf0k.onrender.com',
+  // Cloudflare Workers proxy
+  'https://throbbing-cake-e6b4.anh018031.workers.dev',
+];
+
+// Origins that should receive wildcard '*' (public APIs without credentials)
+const PUBLIC_ORIGINS = [
+  'https://throbbing-cake-e6b4.anh018031.workers.dev',
 ];
 
 const app = express();
@@ -168,11 +176,20 @@ app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,PATCH,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
   res.setHeader('Access-Control-Max-Age', '86400');
-  // Only set credential headers + origin for allowlisted domains
-  if (ALLOWED_ORIGINS.includes(origin)) {
+
+  const isPublic = PUBLIC_ORIGINS.includes(origin);
+
+  // For public proxy origins: allow credentials=false + wildcard origin
+  if (isPublic) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Credentials', 'false');
+  }
+  // For allowlisted domains: use specific origin + credentials
+  else if (ALLOWED_ORIGINS.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
   }
+
   if (req.method === 'OPTIONS') {
     res.status(204).end();
     return;
@@ -756,7 +773,7 @@ app.delete('/api/v1/follows/users/:id/follow', withAuth(async (req: AuthRequest,
 }));
 
 // ─── Topics ──────────────────────────────────────────────────────
-app.get('/api/v1/topics', withAuth(async (_req, res) => {
+app.get('/api/v1/topics', async (_req, res) => {
   const topics = await prisma.topic.findMany({ orderBy: { id: 'asc' } });
   return ok(res, topics.map((t) => ({ id: t.id, name: t.name, description: t.description })));
 }));
