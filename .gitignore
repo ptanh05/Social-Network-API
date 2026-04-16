@@ -2,7 +2,12 @@
 .env
 .env.local
 .env.*.local
-!frontend/.env
+
+# API build output
+api/server/
+
+# Node modules
+node_modules/
 
 # Python
 __pycache__/

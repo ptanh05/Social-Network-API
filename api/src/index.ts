@@ -136,16 +136,23 @@ async function sendVerificationEmail(to: string, username: string, verifyUrl: st
 const ALLOWED_ORIGINS = [
   'http://localhost:5173',
   'http://localhost:5174',
+  // Vercel frontend URLs
   'https://frontend-delta-bice-22.vercel.app',
   'https://frontend-jds2yl23u-ptanh05s-projects.vercel.app',
   'https://frontend-2pmqjxpmt-ptanh05s-projects.vercel.app',
   'https://social-network-mzdhoa71p-ptanh05s-projects.vercel.app',
   'https://social-network-5emiiq1c9-ptanh05s-projects.vercel.app',
   'https://social-network-api-seven.vercel.app',
-  'https://social-network-aplqf0k.onrender.com',
-  'https://api-roan-rho-71.vercel.app',
   'https://social-network-g68stlz7u-ptanh05s-projects.vercel.app',
   'https://social-network-9txoa9a5w-ptanh05s-projects.vercel.app',
+  'https://social-network-lz1cvcubn-ptanh05s-projects.vercel.app',
+  'https://social-network-xdydrfgcu-ptanh05s-projects.vercel.app',
+  'https://social-network-7uvvrrubn-ptanh05s-projects.vercel.app',
+  'https://social-net-eight.vercel.app',
+  // Render backend + other domains
+  'https://social-network-api-f1kb.onrender.com',
+  'https://api-roan-rho-71.vercel.app',
+  'https://social-network-aplqf0k.onrender.com',
 ];
 
 const app = express();
@@ -153,18 +160,23 @@ const REFRESH_COOKIE_NAME = 'refresh_token';
 const FRONTEND_BASE_URL = process.env.FRONTEND_BASE_URL || 'http://localhost:5173';
 const API_PUBLIC_BASE_URL = process.env.API_PUBLIC_BASE_URL || 'http://localhost:3001/api/v1';
 
-// Manual CORS — no external package, more reliable on Vercel
+// CORS middleware — handles OPTIONS preflight and sets headers for all allowed origins
 app.use((req, res, next) => {
   const origin = req.headers.origin ?? '';
   res.setHeader('Vary', 'Origin');
-  if (!ALLOWED_ORIGINS.includes(origin)) {
-    return next();
-  }
-  res.setHeader('Access-Control-Allow-Origin', origin);
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  // Always set method + headers headers on OPTIONS
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,PATCH,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
-  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  res.setHeader('Access-Control-Max-Age', '86400');
+  // Only set credential headers + origin for allowlisted domains
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  }
+  if (req.method === 'OPTIONS') {
+    res.status(204).end();
+    return;
+  }
   next();
 });
 
