@@ -34,7 +34,7 @@ export default function SettingsPage() {
   }, [preferences])
 
   const updateProfileMutation = useMutation({
-    mutationFn: () => usersApi.updateMe({ username, date_of_birth: dateOfBirth }),
+    mutationFn: () => usersApi.updateMe({ username, date_of_birth: dateOfBirth, avatar_url: avatarUrl }),
     onSuccess: () => showToast('Cập nhật thông tin thành công!', 'success'),
     onError: () => showToast('Cập nhật thất bại. Vui lòng thử lại.', 'error'),
   })

@@ -36,7 +36,7 @@ export default function PostCard({ post, index = 0 }: PostCardProps) {
         queryKey: ['likeStatus', post.id],
         queryFn: () =>
             api
-                .get<LikeStatus>(`/likes/posts/${post.id}/status/`)
+                .get<LikeStatus>(`/likes/posts/${post.id}/status`)
                 .then((r) => r.data),
         staleTime: 300000
     });

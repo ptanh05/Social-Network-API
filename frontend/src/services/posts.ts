@@ -33,7 +33,7 @@ export const postsApi = {
         content: string,
         topicIds: number[] = []
     ): Promise<Post> => {
-        const res = await api.post<Post>('/posts/', {
+        const res = await api.post<Post>('/posts', {
             content,
             topic_ids: topicIds
         });
@@ -83,7 +83,7 @@ export const postsApi = {
     },
 
     getTopics: async (): Promise<Topic[]> => {
-        const res = await api.get<Topic[]>('/topics/');
+        const res = await api.get<Topic[]>('/topics');
         return res.data;
     },
 
@@ -97,7 +97,7 @@ export const postsApi = {
         const res = await api.get<{
             comments: Comment[];
             next_cursor: string | null;
-        }>(`/posts/${postId}/comments/`, { params });
+        }>(`/posts/${postId}/comments`, { params });
         return res.data;
     },
 
@@ -106,7 +106,7 @@ export const postsApi = {
         content: string,
         parentId?: number
     ): Promise<Comment> => {
-        const res = await api.post<Comment>(`/posts/${postId}/comments/`, {
+        const res = await api.post<Comment>(`/posts/${postId}/comments`, {
             content,
             parent_id: parentId
         });
@@ -114,13 +114,13 @@ export const postsApi = {
     },
 
     likePost: async (postId: number): Promise<LikeStatus> => {
-        const res = await api.post<LikeStatus>(`/likes/posts/${postId}/like/`);
+        const res = await api.post<LikeStatus>(`/likes/posts/${postId}/like`);
         return res.data;
     },
 
     unlikePost: async (postId: number): Promise<LikeStatus> => {
         const res = await api.delete<LikeStatus>(
-            `/likes/posts/${postId}/like/`
+            `/likes/posts/${postId}/like`
         );
         return res.data;
     }

@@ -27,7 +27,7 @@ export interface CreateReportBody {
 export const reportsApi = {
   /** User: report a post / comment / user */
   createReport: async (body: CreateReportBody): Promise<Report> => {
-    const res = await api.post<Report>('/reports/', body);
+    const res = await api.post<Report>('/reports', body);
     return res.data;
   },
 
@@ -35,7 +35,7 @@ export const reportsApi = {
   getReports: async (status = 'pending', cursor?: string, limit = 20): Promise<PaginatedReports> => {
     const params: Record<string, string> = { status, limit: String(limit) };
     if (cursor) params.cursor = cursor;
-    const res = await api.get<PaginatedReports>('/reports/', { params });
+    const res = await api.get<PaginatedReports>('/reports', { params });
     return res.data;
   },
 

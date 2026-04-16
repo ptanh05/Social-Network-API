@@ -77,7 +77,7 @@ export const notificationsApi = {
     ): Promise<NotificationsResponse> => {
         const params: Record<string, string> = { limit: String(limit) };
         if (cursor !== undefined) params.cursor = cursor;
-        const res = await api.get<NotificationsResponse>('/notifications/', {
+        const res = await api.get<NotificationsResponse>('/notifications', {
             params
         });
         return {

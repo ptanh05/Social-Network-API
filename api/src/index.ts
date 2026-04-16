@@ -147,7 +147,8 @@ app.post('/api/v1/auth/logout', async (req, res) => {
 // ─── Users ──────────────────────────────────────────────────────
 app.get('/api/v1/users/me', withAuth(async (req: AuthRequest, res) => {
   const u = getUser(req);
-  return ok(res, { id: u.id, username: u.username, email: u.email, avatar_url: u.avatar_url, date_of_birth: null, is_admin: u.is_admin, created_at: new Date() });
+  const fullUser = await prisma.user.findUnique({ where: { id: u.id }, select: { id: true, username: true, email: true, avatarUrl: true, dateOfBirth: true, isAdmin: true, createdAt: true } });
+  return ok(res, { id: fullUser!.id, username: fullUser!.username, email: fullUser!.email, avatar_url: fullUser!.avatarUrl, date_of_birth: fullUser!.dateOfBirth, is_admin: fullUser!.isAdmin, created_at: fullUser!.createdAt });
 }));
 
 app.put('/api/v1/users/me', withAuth(async (req: AuthRequest, res) => {

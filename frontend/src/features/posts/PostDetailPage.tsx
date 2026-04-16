@@ -42,7 +42,7 @@ export default function PostDetailPage() {
     const { data: likeStatus } = useQuery({
         queryKey: ['like-status', postId],
         queryFn: () =>
-            api.get<{ liked: boolean }>(`/likes/posts/${postId}/status/`)
+            api.get<{ liked: boolean }>(`/likes/posts/${postId}/status`)
                 .then((r: { data: { liked: boolean } }) => r.data),
         enabled: !!postId,
     });

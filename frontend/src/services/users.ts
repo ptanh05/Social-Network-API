@@ -53,18 +53,18 @@ export const usersApi = {
     return res.data
   },
 
-  updateMe: async (data: { username?: string; date_of_birth?: string }): Promise<User> => {
+  updateMe: async (data: { username?: string; date_of_birth?: string; avatar_url?: string }): Promise<User> => {
     const res = await api.put<User>('/users/me', data)
     return res.data
   },
 
   followUser: async (userId: number): Promise<FollowStatus> => {
-    const res = await api.post<FollowStatus>(`/follows/users/${userId}/follow/`)
+    const res = await api.post<FollowStatus>(`/follows/users/${userId}/follow`)
     return res.data
   },
 
   unfollowUser: async (userId: number): Promise<FollowStatus> => {
-    const res = await api.delete<FollowStatus>(`/follows/users/${userId}/follow/`)
+    const res = await api.delete<FollowStatus>(`/follows/users/${userId}/follow`)
     return res.data
   },
 
@@ -86,14 +86,14 @@ export const usersApi = {
   getFollowers: async (userId: number, cursor?: string, limit = 20): Promise<PaginatedUsers> => {
     const params: Record<string, string> = { limit: String(limit) }
     if (cursor !== undefined) params.cursor = cursor
-    const res = await api.get<PaginatedUsers>(`/follows/users/${userId}/followers/`, { params })
+    const res = await api.get<PaginatedUsers>(`/follows/users/${userId}/followers`, { params })
     return res.data
   },
 
   getFollowing: async (userId: number, cursor?: string, limit = 20): Promise<PaginatedUsers> => {
     const params: Record<string, string> = { limit: String(limit) }
     if (cursor !== undefined) params.cursor = cursor
-    const res = await api.get<PaginatedUsers>(`/follows/users/${userId}/following/`, { params })
+    const res = await api.get<PaginatedUsers>(`/follows/users/${userId}/following`, { params })
     return res.data
   },
 
@@ -114,7 +114,7 @@ export const usersApi = {
   getNotifications: async (cursor?: string, limit = 20): Promise<NotificationsResponse> => {
     const params: Record<string, string> = { limit: String(limit) }
     if (cursor !== undefined) params.cursor = cursor
-    const res = await api.get<NotificationsResponse>('/notifications/', { params })
+    const res = await api.get<NotificationsResponse>('/notifications', { params })
     return res.data
   },
 
@@ -133,17 +133,17 @@ export const usersApi = {
 
   // Bookmarks
   bookmarkPost: async (postId: number): Promise<void> => {
-    await api.post(`/bookmarks/posts/${postId}/`)
+    await api.post(`/bookmarks/posts/${postId}`)
   },
 
   unbookmarkPost: async (postId: number): Promise<void> => {
-    await api.delete(`/bookmarks/posts/${postId}/`)
+    await api.delete(`/bookmarks/posts/${postId}`)
   },
 
   getBookmarks: async (cursor?: string, limit = 20): Promise<{ posts: import('./types').Post[]; next_cursor: string | null }> => {
     const params: Record<string, string> = { limit: String(limit) }
     if (cursor !== undefined) params.cursor = cursor
-    const res = await api.get<{ posts: import('./types').Post[]; next_cursor: string | null }>('/bookmarks/', { params })
+    const res = await api.get<{ posts: import('./types').Post[]; next_cursor: string | null }>('/bookmarks', { params })
     return res.data
   },
 
@@ -151,13 +151,13 @@ export const usersApi = {
   getUserPosts: async (userId: number, cursor?: string, limit = 20): Promise<{ items: PostWithScore[]; next_cursor: string | null }> => {
     const params: Record<string, string> = { limit: String(limit) }
     if (cursor !== undefined) params.cursor = cursor
-    const res = await api.get<{ items: PostWithScore[]; next_cursor: string | null }>(`/users/${userId}/posts/`, { params })
+    const res = await api.get<{ items: PostWithScore[]; next_cursor: string | null }>(`/users/${userId}/posts`, { params })
     return res.data
   },
 
   // Follow status check
   getFollowStatus: async (userId: number): Promise<FollowStatus> => {
-    const res = await api.get<FollowStatus>(`/follows/users/${userId}/status/`)
+    const res = await api.get<FollowStatus>(`/follows/users/${userId}/status`)
     return res.data
   },
 }
