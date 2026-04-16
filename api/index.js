@@ -16,6 +16,7 @@ const ALLOWED_ORIGINS = [
     'https://social-network-api-seven.vercel.app',
     'https://social-network-aplqf0k.onrender.com',
     'https://api-roan-rho-71.vercel.app',
+    'https://social-network-g68stlz7u-ptanh05s-projects.vercel.app',
 ];
 const app = express();
 // Manual CORS — no external package, more reliable on Vercel
@@ -144,7 +145,8 @@ app.post('/api/v1/auth/logout', async (req, res) => {
 // ─── Users ──────────────────────────────────────────────────────
 app.get('/api/v1/users/me', withAuth(async (req, res) => {
     const u = getUser(req);
-    return ok(res, { id: u.id, username: u.username, email: u.email, avatar_url: u.avatar_url, date_of_birth: null, is_admin: u.is_admin, created_at: new Date() });
+    const fullUser = await prisma.user.findUnique({ where: { id: u.id }, select: { id: true, username: true, email: true, avatarUrl: true, dateOfBirth: true, isAdmin: true, createdAt: true } });
+    return ok(res, { id: fullUser.id, username: fullUser.username, email: fullUser.email, avatar_url: fullUser.avatarUrl, date_of_birth: fullUser.dateOfBirth, is_admin: fullUser.isAdmin, created_at: fullUser.createdAt });
 }));
 app.put('/api/v1/users/me', withAuth(async (req, res) => {
     const u = getUser(req);
@@ -180,15 +182,20 @@ app.get('/api/v1/users/:id', withAuth(async (req, res) => {
 }));
 app.get('/api/v1/users/:id/profile', withAuth(async (req, res) => {
     const id = paramId(req, 'id');
-    const user = await prisma.user.findUnique({ where: { id }, select: { id: true, username: true, email: true, avatarUrl: true, dateOfBirth: true, isAdmin: true, createdAt: true } });
+    const user = await prisma.user.findUnique({
+        where: { id },
+        select: { id: true, username: true, email: true, avatarUrl: true, dateOfBirth: true, isAdmin: true, createdAt: true, followersCount: true, followingCount: true, postsCount: true }
+    });
     if (!user)
         return err(res, 404, 'User not found');
-    const [followers_count, following_count, posts_count] = await Promise.all([
-        prisma.follow.count({ where: { followingId: id } }),
-        prisma.follow.count({ where: { followerId: id } }),
-        prisma.post.count({ where: { authorId: id } }),
-    ]);
-    return ok(res, { id: user.id, username: user.username, email: user.email, avatar_url: user.avatarUrl, date_of_birth: user.dateOfBirth, is_admin: user.isAdmin, created_at: user.createdAt, followers_count, following_count, posts_count });
+    return ok(res, {
+        id: user.id, username: user.username, email: user.email,
+        avatar_url: user.avatarUrl, date_of_birth: user.dateOfBirth,
+        is_admin: user.isAdmin, created_at: user.createdAt,
+        followers_count: user.followersCount,
+        following_count: user.followingCount,
+        posts_count: user.postsCount,
+    });
 }));
 app.get('/api/v1/users/:id/posts', withAuth(async (req, res) => {
     const userId = paramId(req, 'id');
@@ -197,12 +204,12 @@ app.get('/api/v1/users/:id/posts', withAuth(async (req, res) => {
     const whereCond = { authorId: userId };
     if (cursor)
         whereCond.createdAt = { lt: new Date(cursor) };
-    const posts = await prisma.post.findMany({ where: whereCond, orderBy: { createdAt: 'desc' }, take: limit + 1, include: { author: { select: { id: true, username: true, email: true, dateOfBirth: true, isAdmin: true, createdAt: true } }, topics: { include: { topic: true } } } });
+    const posts = await prisma.post.findMany({ where: whereCond, orderBy: { createdAt: 'desc' }, take: limit + 1, include: { author: { select: { id: true, username: true, email: true, avatarUrl: true, dateOfBirth: true, isAdmin: true, createdAt: true } }, topics: { include: { topic: true } } } });
     const hasMore = posts.length > limit;
     const items = posts.slice(0, limit).map((p) => ({
         id: p.id, content: p.content, author_id: p.authorId, created_at: p.createdAt, updated_at: p.updatedAt, likes_count: p.likesCount, comments_count: p.commentsCount,
         topics: p.topics.map((pt) => ({ id: pt.topic.id, name: pt.topic.name, description: pt.topic.description })),
-        author: { id: p.author.id, username: p.author.username, email: p.author.email, date_of_birth: p.author.dateOfBirth, is_admin: p.author.isAdmin, created_at: p.author.createdAt },
+        author: { id: p.author.id, username: p.author.username, email: p.author.email, avatar_url: p.author.avatarUrl, date_of_birth: p.author.dateOfBirth, is_admin: p.author.isAdmin, created_at: p.author.createdAt },
     }));
     return ok(res, { items, next_cursor: hasMore && items.length > 0 ? String(items[items.length - 1].created_at) : null });
 }));
@@ -225,7 +232,7 @@ function extractHashtags(content) {
     return matches ? [...new Set(matches.map((h) => h.slice(1).toLowerCase()))] : [];
 }
 function buildPostResponse(p, feed_score = 0) {
-    return { id: p.id, content: p.content, author_id: p.authorId, created_at: p.createdAt, updated_at: p.updatedAt, likes_count: p.likesCount, comments_count: p.commentsCount, topics: p.topics.map((pt) => ({ id: pt.topic.id, name: pt.topic.name, description: pt.topic.description })), author: { id: p.author.id, username: p.author.username, email: p.author.email, date_of_birth: p.author.dateOfBirth, is_admin: p.author.isAdmin, created_at: p.author.createdAt }, feed_score };
+    return { id: p.id, content: p.content, author_id: p.authorId, created_at: p.createdAt, updated_at: p.updatedAt, likes_count: p.likesCount, comments_count: p.commentsCount, topics: p.topics.map((pt) => ({ id: pt.topic.id, name: pt.topic.name, description: pt.topic.description })), author: { id: p.author.id, username: p.author.username, email: p.author.email, avatar_url: p.author.avatarUrl, date_of_birth: p.author.dateOfBirth, is_admin: p.author.isAdmin, created_at: p.author.createdAt }, feed_score };
 }
 app.get('/api/v1/posts/feed', withAuth(async (req, res) => {
     const u = getUser(req);
@@ -234,7 +241,7 @@ app.get('/api/v1/posts/feed', withAuth(async (req, res) => {
     const [prefs, following] = await Promise.all([prisma.userPreference.findUnique({ where: { userId: u.id } }), prisma.follow.findMany({ where: { followerId: u.id }, select: { followingId: true } })]);
     const preferredTopicIds = prefs?.topicIds || [];
     const followingIds = following.map((f) => f.followingId);
-    const posts = await prisma.post.findMany({ where: cursor ? { createdAt: { lt: new Date(cursor) } } : {}, orderBy: { createdAt: 'desc' }, take: limit + 1, include: { author: { select: { id: true, username: true, email: true, dateOfBirth: true, isAdmin: true, createdAt: true } }, topics: { include: { topic: true } } } });
+    const posts = await prisma.post.findMany({ where: cursor ? { createdAt: { lt: new Date(cursor) } } : {}, orderBy: { createdAt: 'desc' }, take: limit + 1, include: { author: { select: { id: true, username: true, email: true, avatarUrl: true, dateOfBirth: true, isAdmin: true, createdAt: true } }, topics: { include: { topic: true } } } });
     const hasMore = posts.length > limit;
     const items = posts.slice(0, limit).map((p) => {
         let score = followingIds.includes(p.authorId) ? 1 : 0;
@@ -254,7 +261,7 @@ app.get('/api/v1/posts/explore', withAuth(async (req, res) => {
         whereCond.topics = { some: { topicId } };
     if (cursor)
         whereCond.createdAt = { lt: new Date(cursor) };
-    const posts = await prisma.post.findMany({ where: whereCond, orderBy: { createdAt: 'desc' }, take: limit + 1, include: { author: { select: { id: true, username: true, email: true, dateOfBirth: true, isAdmin: true, createdAt: true } }, topics: { include: { topic: true } } } });
+    const posts = await prisma.post.findMany({ where: whereCond, orderBy: { createdAt: 'desc' }, take: limit + 1, include: { author: { select: { id: true, username: true, email: true, avatarUrl: true, dateOfBirth: true, isAdmin: true, createdAt: true } }, topics: { include: { topic: true } } } });
     const hasMore = posts.length > limit;
     const items = posts.slice(0, limit).map((p) => buildPostResponse(p));
     return ok(res, { items, next_cursor: hasMore && items.length > 0 ? String(items[items.length - 1].created_at) : null });
@@ -266,7 +273,7 @@ app.get('/api/v1/posts/search', withAuth(async (req, res) => {
     const whereCond = { content: { contains: q, mode: 'insensitive' } };
     if (cursor)
         whereCond.createdAt = { lt: new Date(cursor) };
-    const posts = await prisma.post.findMany({ where: whereCond, orderBy: { createdAt: 'desc' }, take: limit + 1, include: { author: { select: { id: true, username: true, email: true, dateOfBirth: true, isAdmin: true, createdAt: true } }, topics: { include: { topic: true } } } });
+    const posts = await prisma.post.findMany({ where: whereCond, orderBy: { createdAt: 'desc' }, take: limit + 1, include: { author: { select: { id: true, username: true, email: true, avatarUrl: true, dateOfBirth: true, isAdmin: true, createdAt: true } }, topics: { include: { topic: true } } } });
     const hasMore = posts.length > limit;
     const items = posts.slice(0, limit).map((p) => buildPostResponse(p));
     return ok(res, { items, next_cursor: hasMore && items.length > 0 ? String(items[items.length - 1].created_at) : null });
@@ -274,16 +281,17 @@ app.get('/api/v1/posts/search', withAuth(async (req, res) => {
 app.post('/api/v1/posts', validate(createPostSchema), withAuth(async (req, res) => {
     const u = getUser(req);
     const { content, topic_ids } = req.body;
-    const post = await prisma.post.create({ data: { content, authorId: u.id }, include: { author: { select: { id: true, username: true, email: true, dateOfBirth: true, isAdmin: true, createdAt: true } }, topics: { include: { topic: true } } } });
+    const post = await prisma.post.create({ data: { content, authorId: u.id }, include: { author: { select: { id: true, username: true, email: true, avatarUrl: true, dateOfBirth: true, isAdmin: true, createdAt: true } }, topics: { include: { topic: true } } } });
+    await prisma.user.update({ where: { id: u.id }, data: { postsCount: { increment: 1 } } });
     if (topic_ids?.length)
         await prisma.postTopic.createMany({ data: topic_ids.map((tid) => ({ postId: post.id, topicId: tid })), skipDuplicates: true });
     const hashtags = extractHashtags(content);
     await Promise.all(hashtags.map((name) => prisma.hashtag.upsert({ where: { name }, create: { name, postCount: 1 }, update: { postCount: { increment: 1 } } })));
-    const refreshed = await prisma.post.findUnique({ where: { id: post.id }, include: { author: { select: { id: true, username: true, email: true, dateOfBirth: true, isAdmin: true, createdAt: true } }, topics: { include: { topic: true } } } });
+    const refreshed = await prisma.post.findUnique({ where: { id: post.id }, include: { author: { select: { id: true, username: true, email: true, avatarUrl: true, dateOfBirth: true, isAdmin: true, createdAt: true } }, topics: { include: { topic: true } } } });
     return created(res, buildPostResponse(refreshed));
 }));
 app.get('/api/v1/posts/:id', withAuth(async (req, res) => {
-    const post = await prisma.post.findUnique({ where: { id: paramId(req, 'id') }, include: { author: { select: { id: true, username: true, email: true, dateOfBirth: true, isAdmin: true, createdAt: true } }, topics: { include: { topic: true } } } });
+    const post = await prisma.post.findUnique({ where: { id: paramId(req, 'id') }, include: { author: { select: { id: true, username: true, email: true, avatarUrl: true, dateOfBirth: true, isAdmin: true, createdAt: true } }, topics: { include: { topic: true } } } });
     if (!post)
         return err(res, 404, 'Post not found');
     return ok(res, buildPostResponse(post));
@@ -303,7 +311,7 @@ app.put('/api/v1/posts/:id', validate(updatePostSchema), withAuth(async (req, re
         if (topic_ids.length)
             await prisma.postTopic.createMany({ data: topic_ids.map((tid) => ({ postId, topicId: tid })) });
     }
-    const refreshed = await prisma.post.findUnique({ where: { id: postId }, include: { author: { select: { id: true, username: true, email: true, dateOfBirth: true, isAdmin: true, createdAt: true } }, topics: { include: { topic: true } } } });
+    const refreshed = await prisma.post.findUnique({ where: { id: postId }, include: { author: { select: { id: true, username: true, email: true, avatarUrl: true, dateOfBirth: true, isAdmin: true, createdAt: true } }, topics: { include: { topic: true } } } });
     return ok(res, buildPostResponse(refreshed));
 }));
 app.delete('/api/v1/posts/:id', withAuth(async (req, res) => {
@@ -315,6 +323,7 @@ app.delete('/api/v1/posts/:id', withAuth(async (req, res) => {
     if (existing.authorId !== u.id)
         return err(res, 403, 'Not authorized');
     await prisma.post.delete({ where: { id: postId } });
+    await prisma.user.update({ where: { id: existing.authorId }, data: { postsCount: { decrement: 1 } } });
     return res.sendStatus(204);
 }));
 app.get('/api/v1/posts/:id/comments', withAuth(async (req, res) => {
@@ -423,6 +432,10 @@ app.post('/api/v1/follows/users/:id/follow', withAuth(async (req, res) => {
         return err(res, 404, 'User not found');
     try {
         await prisma.follow.create({ data: { followerId: me.id, followingId: targetId } });
+        await Promise.all([
+            prisma.user.update({ where: { id: me.id }, data: { followingCount: { increment: 1 } } }),
+            prisma.user.update({ where: { id: targetId }, data: { followersCount: { increment: 1 } } }),
+        ]);
         const notif = await prisma.notification.create({ data: { userId: targetId, type: 'follow', data: { actor_id: me.id, actor_username: me.username }, actorAvatarUrl: me.avatar_url || null } });
         broadcastNotification(targetId, { ...notif, actor_avatar_url: me.avatar_url });
         return created(res, { following: true });
@@ -435,9 +448,14 @@ app.post('/api/v1/follows/users/:id/follow', withAuth(async (req, res) => {
 }));
 app.delete('/api/v1/follows/users/:id/follow', withAuth(async (req, res) => {
     const u = getUser(req);
-    const result = await prisma.follow.deleteMany({ where: { followerId: u.id, followingId: paramId(req, 'id') } });
+    const targetId = paramId(req, 'id');
+    const result = await prisma.follow.deleteMany({ where: { followerId: u.id, followingId: targetId } });
     if (!result.count)
         return err(res, 404, 'Not following');
+    await Promise.all([
+        prisma.user.update({ where: { id: u.id }, data: { followingCount: { decrement: 1 } } }),
+        prisma.user.update({ where: { id: targetId }, data: { followersCount: { decrement: 1 } } }),
+    ]);
     return ok(res, { following: false });
 }));
 // ─── Topics ──────────────────────────────────────────────────────
@@ -568,12 +586,12 @@ app.get('/api/v1/bookmarks', withAuth(async (req, res) => {
     const whereCond = { userId: u.id };
     if (cursor)
         whereCond.createdAt = { lt: new Date(cursor) };
-    const bookmarks = await prisma.bookmark.findMany({ where: whereCond, orderBy: { createdAt: 'desc' }, take: limit + 1, include: { post: { include: { author: { select: { id: true, username: true, email: true, dateOfBirth: true, isAdmin: true, createdAt: true } }, topics: { include: { topic: true } } } } } });
+    const bookmarks = await prisma.bookmark.findMany({ where: whereCond, orderBy: { createdAt: 'desc' }, take: limit + 1, include: { post: { include: { author: { select: { id: true, username: true, email: true, avatarUrl: true, dateOfBirth: true, isAdmin: true, createdAt: true } }, topics: { include: { topic: true } } } } } });
     const hasMore = bookmarks.length > limit;
     const posts = bookmarks.slice(0, limit).map((b) => ({
         id: b.post.id, content: b.post.content, author_id: b.post.authorId, created_at: b.post.createdAt, updated_at: b.post.updatedAt, likes_count: b.post.likesCount, comments_count: b.post.commentsCount,
         topics: b.post.topics.map((pt) => ({ id: pt.topic.id, name: pt.topic.name, description: pt.topic.description })),
-        author: { id: b.post.author.id, username: b.post.author.username, email: b.post.author.email, date_of_birth: b.post.author.dateOfBirth, is_admin: b.post.author.isAdmin, created_at: b.post.author.createdAt },
+        author: { id: b.post.author.id, username: b.post.author.username, email: b.post.author.email, avatar_url: b.post.author.avatarUrl, date_of_birth: b.post.author.dateOfBirth, is_admin: b.post.author.isAdmin, created_at: b.post.author.createdAt },
     }));
     return ok(res, { posts, next_cursor: hasMore && bookmarks.length > 0 ? String(bookmarks[bookmarks.length - 1]?.createdAt) : null });
 }));
@@ -641,8 +659,30 @@ app.get('/api/v1/reports', withAdmin(async (req, res) => {
     if (cursor !== undefined)
         whereCond.id = { lt: cursor };
     const reports = await prisma.report.findMany({ where: whereCond, orderBy: { id: 'desc' }, take: limit + 1, include: { reporter: { select: { id: true, username: true, email: true } } } });
-    const hasMore = reports.length > limit;
-    const items = reports.slice(0, limit).map((r) => ({ id: r.id, target_type: r.targetType, target_id: r.targetId, reason: r.reason, status: r.status, created_at: r.createdAt, reporter: { id: r.reporter.id, username: r.reporter.username, email: r.reporter.email } }));
+    // Fetch content preview for each report
+    const enrichedReports = await Promise.all(reports.map(async (r) => {
+        let content = null;
+        if (r.targetType === 'post') {
+            const post = await prisma.post.findUnique({ where: { id: r.targetId }, select: { content: true } });
+            content = post?.content ?? null;
+        }
+        else if (r.targetType === 'comment') {
+            const comment = await prisma.comment.findUnique({ where: { id: r.targetId }, select: { content: true } });
+            content = comment?.content ?? null;
+        }
+        else if (r.targetType === 'user') {
+            const target = await prisma.user.findUnique({ where: { id: r.targetId }, select: { username: true } });
+            content = target?.username ?? null;
+        }
+        return {
+            id: r.id, target_type: r.targetType, target_id: r.targetId, reason: r.reason,
+            status: r.status, created_at: r.createdAt,
+            reporter: { id: r.reporter.id, username: r.reporter.username, email: r.reporter.email },
+            content,
+        };
+    }));
+    const hasMore = enrichedReports.length > limit;
+    const items = enrichedReports.slice(0, limit);
     return ok(res, { reports: items, next_cursor: hasMore && items.length > 0 ? String(items[items.length - 1].id) : null });
 }));
 app.put('/api/v1/reports/:id', withAdmin(async (req, res) => {

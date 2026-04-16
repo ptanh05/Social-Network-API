@@ -11,6 +11,7 @@ export interface Report {
   status: ReportStatus;
   created_at: string;
   reporter: { id: number; username: string; email: string };
+  content?: string | null;
 }
 
 export interface PaginatedReports {
@@ -25,13 +26,11 @@ export interface CreateReportBody {
 }
 
 export const reportsApi = {
-  /** User: report a post / comment / user */
   createReport: async (body: CreateReportBody): Promise<Report> => {
     const res = await api.post<Report>('/reports', body);
     return res.data;
   },
 
-  /** Admin: list reports */
   getReports: async (status = 'pending', cursor?: string, limit = 20): Promise<PaginatedReports> => {
     const params: Record<string, string> = { status, limit: String(limit) };
     if (cursor) params.cursor = cursor;
@@ -39,7 +38,6 @@ export const reportsApi = {
     return res.data;
   },
 
-  /** Admin: resolve or dismiss a report */
   updateReport: async (reportId: number, status: 'resolved' | 'dismissed'): Promise<Report> => {
     const res = await api.put<Report>(`/reports/${reportId}`, { status });
     return res.data;

@@ -7,14 +7,17 @@ datasource db {
 }
 
 model User {
-  id             Int       @id @default(autoincrement())
-  username       String    @unique @db.VarChar(50)
-  email          String    @unique @db.VarChar(255)
-  hashedPassword String    @map("hashed_password") @db.VarChar(255)
-  dateOfBirth    DateTime? @map("date_of_birth") @db.Date
-  avatarUrl      String    @default("") @map("avatar_url") @db.Text
-  isAdmin        Boolean   @default(false) @map("is_admin")
-  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  id              Int       @id @default(autoincrement())
+  username        String    @unique @db.VarChar(50)
+  email           String    @unique @db.VarChar(255)
+  hashedPassword   String    @map("hashed_password") @db.VarChar(255)
+  dateOfBirth     DateTime? @map("date_of_birth") @db.Date
+  avatarUrl       String    @default("") @map("avatar_url") @db.Text
+  isAdmin         Boolean   @default(false) @map("is_admin")
+  followersCount  Int       @default(0) @map("followers_count")
+  followingCount  Int       @default(0) @map("following_count")
+  postsCount      Int       @default(0) @map("posts_count")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   posts         Post[]
   comments      Comment[]
@@ -26,7 +29,7 @@ model User {
   notifications Notification[]
   bookmarks     Bookmark[]
   reports       Report[]        @relation("ReportReporter")
-  reportedContent Report[]       @relation("ReportedContent")
+  reportedContent Report[]      @relation("ReportedContent")
 
   @@map("users")
 }
@@ -45,10 +48,10 @@ model Post {
   id             Int      @id @default(autoincrement())
   content        String   @db.Text
   authorId       Int      @map("author_id")
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt      DateTime @default(now()) @map("updated_at") @db.Timestamptz
   likesCount     Int      @default(0) @map("likes_count")
   commentsCount  Int      @default(0) @map("comments_count")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @map("updated_at") @db.Timestamptz
 
   author    User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
   comments  Comment[]
@@ -99,7 +102,7 @@ model Like {
 }
 
 model Follow {
-  followerId  Int      @map("follower_id")
+  followerId   Int      @map("follower_id")
   followingId Int      @map("following_id")
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
 
@@ -112,7 +115,7 @@ model Follow {
 
 model UserPreference {
   userId    Int      @id @map("user_id")
-  topicIds Int[]    @default([]) @map("topic_ids")
+  topicIds  Int[]    @default([]) @map("topic_ids")
   updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -134,11 +137,11 @@ model RefreshToken {
 
 model Notification {
   id             Int      @id @default(autoincrement())
-  userId         Int      @map("user_id")
-  type           String   @db.VarChar(50)
-  data           Json     @default("{}")
+  userId        Int      @map("user_id")
+  type          String   @db.VarChar(50)
+  data          Json     @default("{}")
   actorAvatarUrl String?  @map("actor_avatar_url") @db.Text
-  isRead         Boolean  @default(false) @map("is_read")
+  isRead        Boolean  @default(false) @map("is_read")
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -172,7 +175,7 @@ model Report {
   reporterId Int      @map("reporter_id")
   targetType String   @map("target_type") @db.VarChar(20)
   targetId  Int      @map("target_id")
-  reason     String   @db.Text
+  reason    String   @db.Text
   status    String   @default("pending") @db.VarChar(20)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
 

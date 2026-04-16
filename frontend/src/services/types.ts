@@ -104,3 +104,19 @@ export interface CursorPaginatedResponse<T> {
   items: T[];
   next_cursor: string | null;
 }
+
+export interface Report {
+  id: number;
+  target_type: string;
+  target_id: number;
+  reason: string;
+  status: string;
+  created_at: string;
+  reporter: { id: number; username: string };
+  content?: string | null;
+}
+
+export interface ReportsResponse {
+  reports: Report[];
+  next_cursor: string | null;
+}

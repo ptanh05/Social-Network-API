@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { motion } from 'framer-motion';
 import { reportsApi } from '../../services/reports';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { useAuth } from '../../context/AuthContext';
@@ -118,6 +119,7 @@ interface ReportCardProps {
     status: string;
     created_at: string;
     reporter: { id: number; username: string };
+    content?: string | null;
   };
   onResolve: (id: number, status: 'resolved' | 'dismissed') => void;
   isResolving: boolean;
@@ -152,10 +154,15 @@ function ReportCard({ report, onResolve, isResolving }: ReportCardProps) {
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4">
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 space-y-3"
+    >
+      {/* Header row */}
       <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap mb-2">
+        <div className="flex-1 min-w-0 space-y-1.5">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor[report.status]}`}>
               {statusLabel[report.status]}
             </span>
@@ -165,7 +172,6 @@ function ReportCard({ report, onResolve, isResolving }: ReportCardProps) {
             <span className="text-xs text-gray-400">bởi @{report.reporter.username}</span>
             <span className="text-xs text-gray-400">{timeAgo(report.created_at)}</span>
           </div>
-          <p className="text-sm text-gray-700 dark:text-gray-200">{report.reason}</p>
         </div>
 
         {report.status === 'pending' && (
@@ -187,6 +193,22 @@ function ReportCard({ report, onResolve, isResolving }: ReportCardProps) {
           </div>
         )}
       </div>
-    </div>
+
+      {/* Content preview */}
+      {report.content && (
+        <div className="bg-gray-50 dark:bg-dark-bg rounded-lg p-3 border border-gray-100 dark:border-dark-border">
+          <p className="text-xs font-medium text-gray-400 mb-1 uppercase tracking-wide">Nội dung bị báo cáo</p>
+          <p className="text-sm text-gray-700 dark:text-gray-200 line-clamp-3 whitespace-pre-wrap">
+            {report.content}
+          </p>
+        </div>
+      )}
+
+      {/* Reason */}
+      <div>
+        <p className="text-xs font-medium text-gray-400 mb-1 uppercase tracking-wide">Lý do báo cáo</p>
+        <p className="text-sm text-gray-700 dark:text-gray-200">{report.reason}</p>
+      </div>
+    </motion.div>
   );
 }
