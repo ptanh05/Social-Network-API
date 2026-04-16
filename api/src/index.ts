@@ -1,4 +1,5 @@
 import express from 'express';
+import cors from 'cors';
 import crypto from 'crypto';
 import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -133,69 +134,31 @@ async function sendVerificationEmail(to: string, username: string, verifyUrl: st
   });
 }
 
-const ALLOWED_ORIGINS = [
-  'http://localhost:5173',
-  'http://localhost:5174',
-  // Vercel frontend URLs
-  'https://frontend-delta-bice-22.vercel.app',
-  'https://frontend-jds2yl23u-ptanh05s-projects.vercel.app',
-  'https://frontend-2pmqjxpmt-ptanh05s-projects.vercel.app',
-  'https://social-network-mzdhoa71p-ptanh05s-projects.vercel.app',
-  'https://social-network-5emiiq1c9-ptanh05s-projects.vercel.app',
-  'https://social-network-api-seven.vercel.app',
-  'https://social-network-g68stlz7u-ptanh05s-projects.vercel.app',
-  'https://social-network-9txoa9a5w-ptanh05s-projects.vercel.app',
-  'https://social-network-lz1cvcubn-ptanh05s-projects.vercel.app',
-  'https://social-network-xdydrfgcu-ptanh05s-projects.vercel.app',
-  'https://social-network-7uvvrrubn-ptanh05s-projects.vercel.app',
-  'https://social-net-eight.vercel.app',
-  'https://social-a4fmhtlgd-ptanh05s-projects.vercel.app',
-  // Render backend + other domains
-  'https://social-network-api-f1kb.onrender.com',
-  'https://api-roan-rho-71.vercel.app',
-  'https://social-network-aplqf0k.onrender.com',
-  // Cloudflare Workers proxy
-  'https://throbbing-cake-e6b4.anh018031.workers.dev',
-];
-
-// Origins that should receive wildcard '*' (public APIs without credentials)
-const PUBLIC_ORIGINS = [
-  'https://throbbing-cake-e6b4.anh018031.workers.dev',
-];
+// Parse origins từ env (comma-separated)
+const getAllowedOrigins = (): string[] => {
+  const envOrigins = process.env.CORS_ORIGINS || '';
+  return envOrigins.split(',').map((s) => s.trim()).filter(Boolean);
+};
+const ALLOWED_ORIGINS = getAllowedOrigins();
 
 const app = express();
 const REFRESH_COOKIE_NAME = 'refresh_token';
 const FRONTEND_BASE_URL = process.env.FRONTEND_BASE_URL || 'http://localhost:5173';
 const API_PUBLIC_BASE_URL = process.env.API_PUBLIC_BASE_URL || 'http://localhost:3001/api/v1';
 
-// CORS middleware — handles OPTIONS preflight and sets headers for all allowed origins
-app.use((req, res, next) => {
-  const origin = req.headers.origin ?? '';
-  res.setHeader('Vary', 'Origin');
-  // Always set method + headers headers on OPTIONS
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,PATCH,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
-  res.setHeader('Access-Control-Max-Age', '86400');
-
-  const isPublic = PUBLIC_ORIGINS.includes(origin);
-
-  // For public proxy origins: allow credentials=false + wildcard origin
-  if (isPublic) {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Credentials', 'false');
-  }
-  // For allowlisted domains: use specific origin + credentials
-  else if (ALLOWED_ORIGINS.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-  }
-
-  if (req.method === 'OPTIONS') {
-    res.status(204).end();
-    return;
-  }
-  next();
-});
+// ─── CORS middleware (dùng cors npm, đặt TRƯỚC tất cả route) ───
+app.use(cors({
+  origin: (origin, callback) => {
+    // Cho phép request không có origin (Postman, server-to-server)
+    if (!origin) return callback(null, true);
+    if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+    callback(new Error(`Origin ${origin} not allowed by CORS policy`));
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+  optionsSuccessStatus: 204,
+}));
 
 app.use(express.json());
 
