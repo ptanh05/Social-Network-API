@@ -776,7 +776,7 @@ app.delete('/api/v1/follows/users/:id/follow', withAuth(async (req: AuthRequest,
 app.get('/api/v1/topics', async (_req, res) => {
   const topics = await prisma.topic.findMany({ orderBy: { id: 'asc' } });
   return ok(res, topics.map((t) => ({ id: t.id, name: t.name, description: t.description })));
-}));
+});
 
 // ─── Preferences ─────────────────────────────────────────────────
 app.get('/api/v1/preferences/users/me/preferences', withAuth(async (req: AuthRequest, res) => {
