@@ -335,8 +335,10 @@ app.post('/api/v1/posts/:id/comments', validate(createCommentSchema), withAuth(a
         return err(res, 404, 'Post not found');
     const comment = await prisma.comment.create({ data: { content, postId, authorId: u.id, parentId: parent_id || null }, include: { author: { select: { id: true, username: true, email: true, createdAt: true } } } });
     await prisma.post.update({ where: { id: postId }, data: { commentsCount: { increment: 1 } } });
-    if (post.authorId !== u.id)
-        await prisma.notification.create({ data: { userId: post.authorId, type: 'comment', data: { actor_id: u.id, actor_username: u.username, post_id: postId }, actorAvatarUrl: u.avatar_url || null } });
+    if (post.authorId !== u.id) {
+        const notif = await prisma.notification.create({ data: { userId: post.authorId, type: 'comment', data: { actor_id: u.id, actor_username: u.username, post_id: postId }, actorAvatarUrl: u.avatar_url || null } });
+        broadcastNotification(post.authorId, { ...notif, actor_avatar_url: u.avatar_url });
+    }
     return created(res, { id: comment.id, content: comment.content, post_id: comment.postId, author_id: comment.authorId, parent_id: comment.parentId, created_at: comment.createdAt, author: { id: comment.author.id, username: comment.author.username, email: comment.author.email, created_at: comment.author.createdAt } });
 }));
 app.get('/api/v1/posts/trending/hashtags', withAuth(async (req, res) => {
@@ -355,8 +357,10 @@ app.post('/api/v1/likes/posts/:id/like', withAuth(async (req, res) => {
     try {
         await prisma.like.create({ data: { userId: u.id, postId } });
         await prisma.post.update({ where: { id: postId }, data: { likesCount: { increment: 1 } } });
-        if (post.authorId !== u.id)
-            await prisma.notification.create({ data: { userId: post.authorId, type: 'like', data: { actor_id: u.id, actor_username: u.username, post_id: postId }, actorAvatarUrl: u.avatar_url || null } });
+        if (post.authorId !== u.id) {
+            const notif = await prisma.notification.create({ data: { userId: post.authorId, type: 'like', data: { actor_id: u.id, actor_username: u.username, post_id: postId }, actorAvatarUrl: u.avatar_url || null } });
+            broadcastNotification(post.authorId, { ...notif, actor_avatar_url: u.avatar_url });
+        }
         return created(res, { liked: true });
     }
     catch (e) {
@@ -419,7 +423,8 @@ app.post('/api/v1/follows/users/:id/follow', withAuth(async (req, res) => {
         return err(res, 404, 'User not found');
     try {
         await prisma.follow.create({ data: { followerId: me.id, followingId: targetId } });
-        await prisma.notification.create({ data: { userId: targetId, type: 'follow', data: { actor_id: me.id, actor_username: me.username }, actorAvatarUrl: me.avatar_url || null } });
+        const notif = await prisma.notification.create({ data: { userId: targetId, type: 'follow', data: { actor_id: me.id, actor_username: me.username }, actorAvatarUrl: me.avatar_url || null } });
+        broadcastNotification(targetId, { ...notif, actor_avatar_url: me.avatar_url });
         return created(res, { following: true });
     }
     catch (e) {
@@ -485,8 +490,23 @@ app.put('/api/v1/notifications/read-all', withAuth(async (req, res) => {
     return noContent(res);
 }));
 // ─── Notifications Stream (SSE) ─────────────────────────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const notificationStreams = new Map();
+export function broadcastNotification(userId, notification) {
+    const handlers = notificationStreams.get(userId);
+    if (handlers) {
+        for (const sendEvent of handlers) {
+            try {
+                sendEvent('notification', { notification });
+            }
+            catch {
+                // Client disconnected — will be cleaned up by req 'close' event
+            }
+        }
+    }
+}
 app.get('/api/v1/notifications/stream', async (req, res) => {
+    // EventSource cannot send custom Authorization headers — accept token via query param
     const rawToken = (req.headers.authorization ?? '').startsWith('Bearer ')
         ? req.headers.authorization.slice(7)
         : (typeof req.query.access_token === 'string' ? req.query.access_token : '');
@@ -507,6 +527,10 @@ app.get('/api/v1/notifications/stream', async (req, res) => {
         res.status(401).json({ detail: 'User not found' });
         return;
     }
+    const authUser = {
+        id: user.id, username: user.username, email: user.email,
+        is_admin: user.isAdmin, avatar_url: user.avatarUrl,
+    };
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
@@ -515,21 +539,24 @@ app.get('/api/v1/notifications/stream', async (req, res) => {
     const sendEvent = (eventName, data) => {
         res.write(`event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`);
     };
-    const streamId = user.id;
-    if (!notificationStreams.has(streamId)) {
-        notificationStreams.set(streamId, new Set());
+    if (!notificationStreams.has(authUser.id)) {
+        notificationStreams.set(authUser.id, new Set());
     }
-    notificationStreams.get(streamId).add(sendEvent);
-    sendEvent('connected', { userId: user.id });
+    notificationStreams.get(authUser.id).add(sendEvent);
+    sendEvent('connected', { userId: authUser.id });
+    // Keep connection alive with periodic heartbeat
     const heartbeat = setInterval(() => {
-        if (res.writableEnded) { clearInterval(heartbeat); return; }
+        if (res.writableEnded) {
+            clearInterval(heartbeat);
+            return;
+        }
         res.write(': heartbeat\n\n');
     }, 25000);
     req.on('close', () => {
         clearInterval(heartbeat);
-        notificationStreams.get(streamId)?.delete(sendEvent);
-        if (notificationStreams.get(streamId)?.size === 0) {
-            notificationStreams.delete(streamId);
+        notificationStreams.get(authUser.id)?.delete(sendEvent);
+        if (notificationStreams.get(authUser.id)?.size === 0) {
+            notificationStreams.delete(authUser.id);
         }
     });
 });
